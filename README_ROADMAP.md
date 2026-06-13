@@ -16,6 +16,7 @@ README_MATH_MODEL.md
 
 ```text
 math model = physical/topological prediction axis
+instrument/spectral profile = measurement-truth normalization layer
 patch captures = real-world correction field
 pass/fail dictionary = measured truth override
 local triangle/simplex solve = shared primitive for prediction and correction
@@ -62,6 +63,236 @@ LED cube:
 ```
 
 This separation prevents double-applying tone curves. The LED cube should normally solve **linear-light RGB values** in the selected gamut; optional baked transfer curves can exist for testing or legacy workflows, but should not be the default.
+
+---
+
+## Display profiling and instrument correction
+
+The measured builder should treat measurement accuracy as a first-class part of the display profile. The current workflow already assumes that LED / wall-wash / diffuser behavior is measured with a colorimeter through `spotread`, but earlier captures did not have a spectrophotometer-derived correction for that colorimeter. With an EFI ES-3000-class spectrophotometer available, the roadmap should add an instrument profiling layer before serious measured correction sessions.
+
+Important distinction:
+
+```text
+emitter/display profile:
+    what the LED / wall / diffuser / optics system actually emits
+
+instrument profile:
+    how the measurement device should be corrected before the builder trusts it
+
+correction field:
+    how the measured display response deviates from the math model after
+    the measurement device itself has been corrected
+```
+
+The colorimeter should remain the primary high-speed capture instrument because it is faster and repeatable for large patch sweeps. The spectrophotometer becomes the slower reference instrument used to build a spectral or matrix correction for the exact LED/wall-wash setup.
+
+### Why this is needed
+
+RGBW and multi-emitter LED systems are not standard LCD/OLED spectra. The wall or diffuser further changes the effective spectrum seen by the instrument. A colorimeter without a matching spectral correction may produce stable but biased XYZxyY values.
+
+That bias can look like a solver failure:
+
+```text
+blue primary xy is shifted
+white diode xy is shifted
+yellow/orange residuals appear worse than the optical system really is
+WX high-W regions appear artificially good or bad
+multi-emitter inner-anchor transitions are mis-ranked
+```
+
+The builder should correct the measurement instrument first, then let the model/correction layers learn the real display response.
+
+### Correction artifacts
+
+Add an instrument/profile correction artifact separate from the LED response data:
+
+```text
+InstrumentProfile:
+    instrument_id
+    instrument_type: colorimeter | spectrophotometer
+    model_name
+    serial_number when available
+    driver / Argyll identifier
+    spotread command / options
+    calibration timestamp
+    dark / black handling notes
+```
+
+```text
+SpectralCorrectionProfile:
+    correction_id
+    reference_instrument_id          # spectrophotometer, e.g. EFI ES-3000
+    target_instrument_id             # colorimeter
+    display_profile_id
+    emitter_profile_id
+    geometry_id                      # bench / TV install / diffuser / wall distance
+    correction_type: spectral | matrix | hybrid
+    raw_colorimeter_xyz
+    reference_spectro_xyz
+    correction_matrix_3x3 when used
+    spectral_sample / CCSS-style data when available
+    training_patch_set
+    validation_patch_set
+    holdout_error_stats
+    valid_luminance_range
+    valid_channel_families
+    created_at
+```
+
+The display profile should reference this artifact:
+
+```text
+DisplayProfile:
+    display_profile_id
+    emitter_profile_id
+    instrument_profile_id
+    spectral_correction_profile_id
+    geometry_id
+    reference_white_xy
+    measurement_units
+```
+
+### First implementation: paired spectro/colorimeter matrix correction
+
+The simplest useful implementation is a paired-patch 3x3 XYZ correction matrix.
+
+Capture the same patch list with both instruments:
+
+```text
+1. Render patch.
+2. Measure with spectrophotometer reference.
+3. Measure with colorimeter.
+4. Store both raw XYZxyY records.
+5. Fit a matrix M such that:
+
+   XYZ_reference ≈ M · XYZ_colorimeter
+```
+
+Solve the matrix with weighted least squares:
+
+```text
+M = argmin_M Σ w_i || XYZ_ref_i - M · XYZ_col_i ||²
+```
+
+Useful weights:
+
+```text
+ignore or downweight near-black / noisy low-Y samples
+include pure R/G/B/W full-drive anchors
+include R/G/B/W ramps
+include neutral ramp
+include RG/RB/GB edges
+include RW/GW/BW boundaries
+include WX high-W probes
+include known difficult hues: yellow, orange, rose, blue, magenta
+hold out a validation subset that is not used for fitting
+```
+
+The correction should be validated before it is accepted:
+
+```text
+before/after mean dE
+before/after median dE
+P90 / P95 / max dE
+per-channel-family residuals
+neutral-axis residuals
+pure-primary residuals
+WX high-W residuals
+low-Y stability
+```
+
+A matrix correction is not as rich as a full spectral correction, but it is easy to implement and immediately useful. Later, if the tooling supports it cleanly, add a spectral sample / CCSS-style path and let the colorimeter apply the spectral correction directly before the builder receives XYZ.
+
+### Host GUI / capture workflow
+
+The host calibration GUI should preserve both raw and corrected readings:
+
+```text
+spotread raw result
+    ↓
+optional instrument correction
+    ↓
+corrected XYZxyY used by verifier / builder
+```
+
+Never discard raw measurements. Every capture row should be able to store:
+
+```text
+X_raw, Y_raw, Z_raw, x_raw, y_raw
+X_corr, Y_corr, Z_corr, x_corr, y_corr
+instrument_id
+instrument_correction_id
+reference_instrument_id when paired
+correction_applied: true | false
+```
+
+The GUI should eventually support:
+
+```text
+load instrument correction profile
+capture paired spectro/colorimeter profile patches
+fit correction matrix
+validate correction matrix
+toggle raw vs corrected display in verifier
+export correction profile JSON
+include correction metadata in verifier CSVs
+```
+
+The measured builder should default to corrected XYZ when a valid correction profile is attached, while still allowing raw-only sessions for bring-up or debugging.
+
+### Recommended workflow slot
+
+A full measured workflow should become:
+
+```text
+1. Define emitter/display geometry
+   LED package, wall/diffuser, distance, ambient constraints.
+
+2. Create or load instrument profile
+   colorimeter identity, spectro identity, spotread commands.
+
+3. Build spectral / matrix correction
+   paired spectro + colorimeter patch captures.
+
+4. Validate instrument correction
+   check holdout patches and per-family residuals.
+
+5. Measure strict sub_gamut baseline
+   diode basis, ramps, edges, neutral line.
+
+6. Build calibrated strict sub_gamut LUT / response profile.
+
+7. Build WX / overdrive models from calibrated baseline
+   radial, virtual-axis maxbright, LP reference.
+
+8. Verify WX / multi-emitter models
+   record pass/fail dictionary and response curves.
+
+9. Run optional capture-cloud correction
+   local simplex correction, response-learning, adaptive probes.
+
+10. Export LUT + metadata
+    include instrument correction ids and raw/corrected measurement policy.
+```
+
+This keeps the spectrophotometer work from becoming a mandatory bottleneck for every capture session. The expensive reference measurement is used to qualify the colorimeter, and the colorimeter then handles the dense capture work.
+
+### When to rebuild the correction
+
+The correction should be considered tied to the instrument and optical setup. Rebuild or revalidate it when any of these changes:
+
+```text
+new LED strip / diode package / emitter set
+wall, diffuser, lens, or reflection surface changes
+bench distance vs installed distance changes significantly
+colorimeter or spectro changes
+spotread mode or observer/measurement options change
+large thermal or aging drift is observed
+WX/maxbright mode reaches regions not covered by the correction training set
+multi-emitter package adds new spectral peaks
+```
+
+A quick validation subset can be run more often than a full correction build.
 
 ---
 
@@ -142,6 +373,8 @@ XYZxy, Lab, LCh, and Luv parsing
 structured UDP replies
 local JSON capture traces
 model-matched out-of-hull expected-xy projection in the verifier
+verifier reference-white override controls
+fallback diode-basis measurement / DiodeProfile fetch path
 ```
 
 ---
@@ -535,6 +768,33 @@ For MCU targets with 8 / 16 / 32 MB PSRAM, useful starting profiles are:
 
 The measured builder should support multiple data sources rather than requiring one giant capture set.
 
+### Instrument correction captures
+
+Before large LED-response captures, the builder should be able to run a small paired instrument profile:
+
+```text
+spectrophotometer reference patches
+colorimeter matched patches
+matrix/spectral correction fit
+holdout validation
+instrument correction profile export
+```
+
+Recommended first paired patch set:
+
+```text
+black / near-black
+R, G, B, W full-drive
+R, G, B, W mid-drive
+neutral ramp
+RG/RB/GB edges
+RW/GW/BW boundaries
+yellow/orange/rose/blue/magenta stress patches
+WX high-W probes for the active overdrive model
+```
+
+This profile is not a replacement for LED correction data. It is the measurement-normalization layer that should be applied before the builder learns emitter ramps, pass/fail dictionaries, or capture-cloud response curves.
+
 ### Minimal anchors
 
 ```text
@@ -635,6 +895,11 @@ expected raw xy/XYZ
 expected projected xy/XYZ
 rendered output value
 measured XYZxyY / Lab / LCh / Luv
+raw instrument XYZxyY
+corrected instrument XYZxyY
+instrument profile id
+instrument correction profile id
+measurement correction applied flag
 error metrics
 pass/fail status
 source verifier/capture session
@@ -718,6 +983,7 @@ Fill16CaptureRampResponseProvider
 TemporalBFIResponseProvider
 HybridResponseProvider
 RGBIdentityResponseProvider
+InstrumentCorrectedCaptureResponseProvider
 MultiEmitterProfileResponseProvider
 ```
 
@@ -755,6 +1021,7 @@ Loads captures and verifier dictionaries from disk, builds correction fields, ge
 Offline mode should load:
 
 ```text
+instrument correction profiles
 single-channel ramps
 mixed patch captures
 verification reports
@@ -775,9 +1042,10 @@ Uses the host calibration GUI UDP capture server to request captures while build
 Live mode can:
 
 ```text
+build or load an instrument correction profile
 build a prediction dictionary
 capture model candidates
-compute xyY / Lab / LCh / Luv error
+compute raw and corrected xyY / Lab / LCh / Luv error
 retry corrected candidates
 update pass/fail dictionaries before final LUT generation
 request adaptive sparse captures
@@ -891,6 +1159,9 @@ coefficient_q_format
 channel_order
 projection_method
 display_profile
+instrument_profile_id
+instrument_correction_profile_id
+measurement_correction_policy
 build_mode
 response_provider
 wx_mode
@@ -939,6 +1210,11 @@ correction_triangle_id
 measurement_format
 spotread_command
 display_profile
+instrument_id
+instrument_correction_id
+measurement_correction_applied
+raw_XYZxyY_available
+corrected_XYZxyY_available
 ```
 
 This prevents Rec.709, Rec.2020, native, linear, baked-transfer, strict, WX, and multi-emitter results from being conflated in the correction dictionary.
@@ -992,6 +1268,14 @@ rgbw_lut_builder/
       spotread_protocol.py
       udp_client.py
 
+    profiling/
+      instruments.py
+      spectral_correction.py
+      matrix_correction.py
+      paired_capture.py
+      validation.py
+      display_profile.py
+
     correction/
       residuals.py
       correction_field.py
@@ -1042,12 +1326,16 @@ rgbw_lut_builder/
   tools/
     build_lut.py
     verify_lut.py
+    profile_instrument.py
+    validate_instrument_profile.py
     run_live_capture.py
     convert_temporal_bfi_dataset.py
     generate_capture_plan.py
 
   docs/
     capture_protocol.md
+    display_profiling.md
+    instrument_correction.md
     temporal_bfi_dataset.md
     lut_format.md
     migration_from_temporalbfi.md
@@ -1072,6 +1360,7 @@ NumPy memmap LUT write helpers
 binary cube export patterns for vertex LUTs
 summary JSON / diagnostics writer patterns
 host_calibration_gui UDP capture protocol
+host_calibration_gui spotread raw measurement parsing
 ```
 
 ### Refactor / replace
@@ -1080,6 +1369,7 @@ host_calibration_gui UDP capture protocol
 replace Delaunay as default solver with math-model measured builder
 split RGB-only and RGBW topology models cleanly
 replace hardcoded ramp arrays with response providers
+add display/instrument profiling and spectro-derived colorimeter correction artifacts
 make pass/fail dictionary first-class
 add WX mode taxonomy: strict_subgamut, wx_radial_virtual, wx_virtual_axis_maxbright, wx_lp_legacy
 add emitter classification for inner / outer / edge emitters
@@ -1193,6 +1483,34 @@ rgbw-lut-build \
   --interpolation tetrahedral
 ```
 
+Instrument correction profile from paired spectro/colorimeter captures:
+
+```bash
+rgbw-lut-profile-instrument \
+  --display-profile profiles/wallwash_tv.json \
+  --reference-instrument efi-es-3000 \
+  --target-instrument colorimeter-primary \
+  --capture-plan plans/instrument_profile_rgbw_sparse.csv \
+  --correction-type matrix3x3 \
+  --holdout-ratio 0.25 \
+  --output profiles/instrument_corrections/tv_wallwash_es3000_to_colorimeter.json
+```
+
+Measured RGBW build using an instrument correction profile:
+
+```bash
+rgbw-lut-build \
+  --mode offline-measured \
+  --output-family rgbw16 \
+  --gamut rec2020 \
+  --input-transfer linear \
+  --display-profile profiles/wallwash_tv.json \
+  --instrument-correction profiles/instrument_corrections/tv_wallwash_es3000_to_colorimeter.json \
+  --rgbw-mode wx_virtual_axis_maxbright \
+  --cube-size 256 \
+  --interpolation tetrahedral
+```
+
 Live measured calibration:
 
 ```bash
@@ -1278,6 +1596,18 @@ Use the roadmap rows below for task-level status and ownership, then use the fun
 | load hardcoded fallback ramps | planned | Legacy strict Y/XYZ fallback curves and constants -> `rgbw_lut_builder/response/hardcoded_ramps.py` | n/a | `rgbw_lut_builder/response/hardcoded_ramps.py` exists as the target owner; candidate fallback helpers are pinned in `docs/project_function_tree.md`. |
 | add TemporalBFI dense response backend with chunked/indexed lookup | planned | TemporalBFI conversion/host-capture surfaces -> `rgbw_lut_builder/response/temporal_bfi.py` | n/a | `rgbw_lut_builder/response/temporal_bfi.py` exists as the target owner; source surfaces are tracked in `docs/project_function_tree.md`. |
 | add HybridResponseProvider source precedence | planned | Response-provider composition -> `rgbw_lut_builder/response/hybrid.py` | n/a | `rgbw_lut_builder/response/hybrid.py` exists as the target owner and will compose `base`, `fill16_ramps`, `hardcoded_ramps`, and `temporal_bfi`. |
+
+
+### Phase 3A: display profiling and instrument correction
+
+| Roadmap item | Status | Move target / source | Math / prototype | Pinned work |
+| --- | --- | --- | --- | --- |
+| add instrument/display profile schema | planned | New profile artifacts -> `rgbw_lut_builder/profiling/instruments.py` and `rgbw_lut_builder/profiling/display_profile.py` | [Display profiling and instrument correction](#display-profiling-and-instrument-correction) | Target modules should record colorimeter, spectro, geometry, raw/corrected measurement policy, and correction ids. |
+| implement paired spectro/colorimeter capture workflow | planned | Host calibration GUI + UDP capture protocol + `tools/profile_instrument.py` -> `rgbw_lut_builder/profiling/paired_capture.py` | [Display profiling and instrument correction](#display-profiling-and-instrument-correction) | First version should render the same sparse RGBW/WX patch plan for the spectrophotometer and colorimeter and store paired raw XYZxyY. |
+| fit 3x3 XYZ correction matrix | planned | New correction fitter -> `rgbw_lut_builder/profiling/matrix_correction.py` | [Display profiling and instrument correction](#first-implementation-paired-spectrocolorimeter-matrix-correction) | Fit `XYZ_reference ≈ M · XYZ_colorimeter`, with low-Y/outlier handling and a holdout validation report. |
+| support spectral / CCSS-style correction metadata | planned | Future spectral artifact loader/exporter -> `rgbw_lut_builder/profiling/spectral_correction.py` | [Display profiling and instrument correction](#correction-artifacts) | Keep this optional after matrix correction; metadata should allow a later spectro-derived spectral sample path without changing capture schemas. |
+| apply instrument correction in capture loaders | planned | Capture loaders and response providers -> `rgbw_lut_builder/captures/loaders.py`, `rgbw_lut_builder/response/*` | [Display profiling and instrument correction](#host-gui--capture-workflow) | Raw XYZxyY must be preserved; corrected XYZxyY becomes the default measurement used by builder/verifier when a valid correction profile is attached. |
+| add verifier raw-vs-corrected diagnostics | planned | Verifier/report surfaces -> `rgbw_lut_builder/verify/reports.py` and host calibration GUI verifier | [Display profiling and instrument correction](#host-gui--capture-workflow) | Reports should show whether correction was applied and allow before/after error summaries for the correction profile. |
 
 ### Phase 4: model-vs-capture diagnostics
 
@@ -1429,6 +1759,7 @@ math-model LUT builder: copied legacy path still available, with package-owned m
 WX radial / virtual-axis max-brightness / LP white-overdrive model family: available as functional experimental path
 multi-emitter layered simplex model: design documented, including degenerate inner-anchor line fallback, needs implementation
 RGB-only device model: package API plus initial package-owned LUT-build integration now available
+display/instrument profiling and spectro-derived colorimeter correction: design documented, needs implementation
 ChannelResponseProvider abstraction: needs implementation
 TemporalBFI response backend: needs implementation
 measured correction field: needs implementation
