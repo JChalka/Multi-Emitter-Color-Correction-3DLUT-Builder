@@ -35,7 +35,6 @@ import argparse
 import concurrent.futures
 import csv
 import hashlib
-from datetime import datetime, timezone
 import itertools
 import json
 import math
@@ -48,6 +47,12 @@ from scipy.optimize import nnls as scipy_nnls, least_squares
 from scipy.spatial import ConvexHull, Delaunay, cKDTree
 
 try:
+    from ..build import live_measured as build_live_measured
+    from ..build import diagnostics as build_diagnostics
+    from ..build import lut_writer as build_lut_writer
+    from ..captures import loaders as capture_loaders
+    from ..correction import pass_fail_dictionary as correction_pass_fail_dictionary
+    from ..captures.validators import is_ok, safe_float, safe_int
     from ..paths import DEFAULT_CONFIG_DIR, DEFAULT_LUT_OUTPUT_DIR
     from .prototype_measured_white_solver import (
         DEFAULT_INPUT_DIR,
@@ -57,11 +62,14 @@ try:
         fit_basis_from_all_families,
         lab_to_lch,
         xyz_to_lab,
-        safe_float,
-        safe_int,
-        is_ok,
     )
 except ImportError:
+    import rgbw_lut_builder.build.live_measured as build_live_measured
+    import rgbw_lut_builder.build.diagnostics as build_diagnostics
+    import rgbw_lut_builder.build.lut_writer as build_lut_writer
+    import rgbw_lut_builder.captures.loaders as capture_loaders
+    import rgbw_lut_builder.correction.pass_fail_dictionary as correction_pass_fail_dictionary
+    from rgbw_lut_builder.captures.validators import is_ok, safe_float, safe_int
     from prototype_measured_white_solver import (
         DEFAULT_INPUT_DIR,
         ReferenceWhite,
@@ -70,9 +78,6 @@ except ImportError:
         fit_basis_from_all_families,
         lab_to_lch,
         xyz_to_lab,
-        safe_float,
-        safe_int,
-        is_ok,
     )
 
     _PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -182,67 +187,7 @@ def parse_args() -> argparse.Namespace:
 # ---------------------------------------------------------------------------
 
 def load_captures(input_dir: Path) -> tuple[np.ndarray, np.ndarray, int, list[dict]]:
-    """Load all ok=True captures from input_dir.
-
-    Deduplicates rows with identical (r16, g16, b16, w16) drive tuples by
-    averaging their XYZ measurements.  Independent captures with distinct
-    drive values are kept as separate points.
-
-    Returns
-    -------
-    xyz_points  : (N, 3) float64  — XYZ of each unique drive state
-    rgbw_points : (N, 4) float64  — RGBW drive values [0..65535]
-    raw_count   : int             — total ok rows before deduplication
-    meta        : list[dict]      — per-point metadata for utilization report
-    """
-    channels = ("r16", "g16", "b16", "w16")
-    buckets: dict[tuple[int, int, int, int], list[np.ndarray]] = {}
-    bucket_names: dict[tuple[int, int, int, int], list[str]] = {}
-    raw_count = 0
-
-    for csv_path in sorted(input_dir.glob("*.csv")):
-        with csv_path.open("r", newline="", encoding="utf-8", errors="replace") as handle:
-            for row in csv.DictReader(handle):
-                if not is_ok(row.get("ok")):
-                    continue
-                drives = tuple(safe_int(row.get(c)) for c in channels)
-                total_drive = sum(drives)
-                if total_drive <= 0:
-                    continue
-                xyz = np.array(
-                    [safe_float(row.get("X")), safe_float(row.get("Y")), safe_float(row.get("Z"))],
-                    dtype=np.float64,
-                )
-                if not np.isfinite(xyz).all() or xyz[1] <= 0.0:
-                    continue
-                raw_count += 1
-                buckets.setdefault(drives, []).append(xyz)
-                bucket_names.setdefault(drives, []).append(str(row.get("name", "")))
-
-    if not buckets:
-        raise RuntimeError(f"No valid captures found in {input_dir}")
-
-    keys = sorted(buckets.keys())
-    xyz_list: list[np.ndarray] = []
-    rgbw_list: list[np.ndarray] = []
-    meta: list[dict] = []
-
-    for drives in keys:
-        xyz_stack = np.stack(buckets[drives], axis=0)
-        xyz_mean = xyz_stack.mean(axis=0)
-        n_avg = len(buckets[drives])
-        xyz_list.append(xyz_mean)
-        rgbw_list.append(np.array(drives, dtype=np.float64))
-        meta.append({
-            "r16": drives[0], "g16": drives[1], "b16": drives[2], "w16": drives[3],
-            "X": float(xyz_mean[0]), "Y": float(xyz_mean[1]), "Z": float(xyz_mean[2]),
-            "n_averaged": n_avg,
-            "example_name": bucket_names[drives][0],
-        })
-
-    xyz_points = np.array(xyz_list, dtype=np.float64)
-    rgbw_points = np.array(rgbw_list, dtype=np.float64)
-    return xyz_points, rgbw_points, raw_count, meta
+    return capture_loaders.load_captures(input_dir)
 
 
 # ---------------------------------------------------------------------------
@@ -262,10 +207,9 @@ def fit_constrained_bary(
     anchor_rgbw and returns (rgbw_out, weights).
     """
     k = len(anchor_xyz)
-    # Scale the sum constraint to dominate the XYZ fit
     scale = max(float(np.max(np.abs(anchor_xyz))), 1.0) * 1e3
-    A = np.vstack([anchor_xyz.T, scale * np.ones((1, k))])   # (4, k)
-    b_vec = np.append(target_xyz, scale)                       # (4,)
+    A = np.vstack([anchor_xyz.T, scale * np.ones((1, k))])
+    b_vec = np.append(target_xyz, scale)
     w, _ = scipy_nnls(A, b_vec)
     w_sum = float(w.sum())
     if w_sum > 1e-12:
@@ -284,29 +228,11 @@ def project_to_hull_batch(
     tri: Delaunay,
     n_steps: int = 40,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Project out-of-hull XYZ points to the convex hull boundary along their
-    chromaticity rays (uniform scale toward origin).
-
-    For each point i, binary-searches the maximum scale factor t ∈ (0, 1] such
-    that  t * xyz_out[i]  lies inside the convex hull.  Preserves CIE
-    chromaticity (x, y) while clamping luminance to the maximum the display
-    can physically reproduce for that chromaticity.
-
-    This is the primary out-of-hull strategy.  Bright-neutral targets (e.g.
-    full-white input) whose additive-RGB target Y slightly exceeds the hull
-    boundary will be projected to the W=max rim of the hull, so the Delaunay
-    interpolation naturally selects W-dominant captures as vertices.
-
-    Returns
-    -------
-    projected : (P, 3) float64  — projected XYZ; equals xyz_out for failures
-    success   : (P,)  bool      — True where a valid interior was found on the ray
-    """
+    """Project out-of-hull XYZ points to the convex hull boundary along their chromaticity rays."""
     P = len(xyz_out)
     scale_lo = np.zeros(P, dtype=np.float64)
     has_interior = np.zeros(P, dtype=bool)
 
-    # Progressive scan: find a guaranteed in-hull point on each chromaticity ray
     for s in (0.95, 0.9, 0.8, 0.7, 0.5, 0.3, 0.1, 0.05, 0.01, 0.001):
         remaining_idx = np.where(~has_interior)[0]
         if len(remaining_idx) == 0:
@@ -318,20 +244,16 @@ def project_to_hull_batch(
         has_interior[found_global] = True
 
     scale_hi = np.ones(P, dtype=np.float64)
-
-    # Vectorised binary search: converge scale_lo → boundary
     for _ in range(n_steps):
         if not has_interior.any():
             break
-        s_mid = (scale_lo + scale_hi) / 2.0              # (P,)
-        candidates = xyz_out * s_mid[:, None]             # (P, 3)
-        in_hull = tri.find_simplex(candidates) >= 0       # (P,)
-        # Only update bounds for points that have a known interior (active)
+        s_mid = (scale_lo + scale_hi) / 2.0
+        candidates = xyz_out * s_mid[:, None]
+        in_hull = tri.find_simplex(candidates) >= 0
         update = has_interior
-        scale_lo = np.where(update & in_hull,  s_mid, scale_lo)
+        scale_lo = np.where(update & in_hull, s_mid, scale_lo)
         scale_hi = np.where(update & ~in_hull, s_mid, scale_hi)
 
-    # Apply a tiny inward margin to avoid floating-point boundary glitches
     final_scale = np.where(has_interior, scale_lo * 0.9999, 1.0)
     projected = xyz_out * final_scale[:, None]
     return projected, has_interior
@@ -342,61 +264,36 @@ def project_to_hull_boundary(
     tri: Delaunay,
     n_steps: int = 44,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Project ANY XYZ targets (in-hull OR out-of-hull) to the convex hull surface.
-
-    Finds max t s.t. ``t * xyz`` is inside the hull, for t ∈ (0, ∞).
-
-    - In-hull targets (t=1 already inside): binary-searches upward to find the
-      OUTWARD hull boundary (t > 1).  This is the key path that pushes targets
-      toward W-dominant hull-surface captures and drives near-100% utilisation.
-    - Out-of-hull targets (t=1 outside): binary-searches inward (t < 1), same
-      as the legacy ``project_to_hull_batch``.
-
-    Chromaticity (CIE x, y) is exactly preserved; only luminance changes.
-
-    Returns
-    -------
-    projected : (P, 3) float64
-    success   : (P,)  bool  — False only when the hull has no interior on that ray
-    """
+    """Project any XYZ targets to the convex hull surface along their chromaticity rays."""
     P = len(xyz_targets)
-
-    # Classify each target
-    at_t1 = tri.find_simplex(xyz_targets) >= 0  # (P,) — in-hull at t=1?
-
+    at_t1 = tri.find_simplex(xyz_targets) >= 0
     scale_lo = np.zeros(P, dtype=np.float64)
     scale_hi = np.ones(P, dtype=np.float64)
-    has_lo = np.zeros(P, dtype=bool)   # known in-hull scale
-    has_hi = np.zeros(P, dtype=bool)   # known out-of-hull scale
+    has_lo = np.zeros(P, dtype=bool)
+    has_hi = np.zeros(P, dtype=bool)
 
-    # --- In-hull targets: lo=1 is inside, find hi > 1 (exponential scan up) ---
     in_idx = np.where(at_t1)[0]
     if len(in_idx):
         scale_lo[in_idx] = 1.0
         has_lo[in_idx] = True
-        # scale_hi will be set once we find an out-of-hull upper bound
         t_test = 2.0
         still_searching = in_idx.copy()
-        for _ in range(7):   # 2, 4, 8, 16, 32, 64, 128 × original
+        for _ in range(7):
             if len(still_searching) == 0:
                 break
             candidates = xyz_targets[still_searching] * t_test
-            outside = still_searching[tri.find_simplex(candidates) < 0]
-            inside  = still_searching[tri.find_simplex(candidates) >= 0]
-            # Those now outside: hi found
+            simplices = tri.find_simplex(candidates)
+            outside = still_searching[simplices < 0]
+            inside = still_searching[simplices >= 0]
             scale_hi[outside] = t_test
             has_hi[outside] = True
-            # Those still inside: update lo, keep searching
             scale_lo[inside] = t_test
             still_searching = inside
             t_test *= 2.0
-        # Any still inside after 128× are essentially unbounded → treat as failure
-        # (won't happen for a finite hull, but guard anyway)
 
-    # --- Out-of-hull targets: hi=1 is outside, find lo < 1 (scan down) ---
     out_idx = np.where(~at_t1)[0]
     if len(out_idx):
-        has_hi[out_idx] = True   # scale_hi already 1.0
+        has_hi[out_idx] = True
         for s in (0.95, 0.9, 0.8, 0.7, 0.5, 0.3, 0.1, 0.05, 0.01, 0.001):
             need_lo = np.where(~at_t1 & ~has_lo)[0]
             if len(need_lo) == 0:
@@ -406,14 +303,13 @@ def project_to_hull_boundary(
             scale_lo[found] = s
             has_lo[found] = True
 
-    # --- Binary search for all points where both bounds are known ---
     active = has_lo & has_hi
     for _ in range(n_steps):
         if not active.any():
             break
         s_mid = (scale_lo + scale_hi) / 2.0
         in_hull = tri.find_simplex(xyz_targets * s_mid[:, None]) >= 0
-        scale_lo = np.where(active & in_hull,  s_mid, scale_lo)
+        scale_lo = np.where(active & in_hull, s_mid, scale_lo)
         scale_hi = np.where(active & ~in_hull, s_mid, scale_hi)
 
     success = has_lo & has_hi
@@ -435,16 +331,7 @@ def compute_y_scale(
     reference_white: ReferenceWhite | None = None,
     rgbw_points: np.ndarray | None = None,
 ) -> float:
-    """Neutral-axis luminance scale.
-
-    Earlier versions used the highest measured Y on the D65 ray, which pushes
-    full white toward the brightest W-inclusive hull point (~2k Y here).  That
-    is not the desired endpoint: full white should target the best measured
-    D65-ish state with W at/near 65535, then use RGB only as residual
-    correction.  If reference/capture data are available, choose that measured
-    endpoint and scale neutral targets to it.  Otherwise fall back to the legacy
-    hull-boundary search.
-    """
+    """Neutral-axis luminance scale."""
     white_xyz = target_rgb_basis @ np.full(3, sample_scale)
 
     if reference_white is not None and rgbw_points is not None and len(xyz_points):
@@ -454,51 +341,37 @@ def compute_y_scale(
             x = xyz_points[:, 0] / denom
             y = xyz_points[:, 1] / denom
             xy_dist = np.sqrt((x - reference_white.x) ** 2 + (y - reference_white.y) ** 2)
-            # Full-white endpoint: require absolute W near max, then pick closest
-            # chromaticity to the requested reference white.  This avoids chasing
-            # the brightest W-inclusive point when it is not actually D65.
             w = rgbw_points[:, 3]
             valid = (w >= sample_scale * 0.98) & np.isfinite(xy_dist) & (xyz_points[:, 1] > 0)
             if valid.any():
-                # Prefer closest xy first; use Y only as a weak tie-break.
                 cand = np.where(valid)[0]
                 score = xy_dist[cand] * 1000.0 - (xyz_points[cand, 1] / max(float(xyz_points[cand, 1].max()), 1.0)) * 0.01
                 best = cand[int(np.argmin(score))]
                 return float(xyz_points[best, 1] / base_Y)
 
-    # Legacy fallback: find hull boundary on reference-white ray.
-    _own_tri = tri is None
-    if _own_tri:
+    own_tri = tri is None
+    if own_tri:
         tri = Delaunay(xyz_points)
 
     in_hull = tri.find_simplex(white_xyz[None])[0] >= 0
-
     if not in_hull:
-        # white_xyz is outside the capture hull — project inward to boundary
         proj, success = project_to_hull_batch(white_xyz[None], tri, n_steps=n_steps)
-        if _own_tri:
+        if own_tri:
             del tri
         if success[0] and float(white_xyz[1]) > 1e-6:
             return float(proj[0, 1] / white_xyz[1]) * 0.9999
         return 1.0
 
-    # white_xyz is inside the hull — binary-search OUTWARD for the hull boundary.
-    # project_to_hull_batch only searches t ∈ (0, 1], so we need to do this
-    # separately with t > 1.
     white_norm = float(np.linalg.norm(white_xyz))
     if white_norm < 1e-12:
-        if _own_tri:
+        if own_tri:
             del tri
         return 1.0
 
     white_unit = white_xyz / white_norm
-    # Upper bound: project all captures onto the white direction, take max.
-    # Multiply by 1.05 to guarantee at least one step beyond the hull.
-    dots = xyz_points @ white_unit          # (N,) — scalar projections
+    dots = xyz_points @ white_unit
     t_hi = float(dots.max()) / white_norm * 1.05
-
-    t_lo = 1.0   # guaranteed inside (verified above)
-
+    t_lo = 1.0
     for _ in range(n_steps):
         t_mid = (t_lo + t_hi) / 2.0
         if tri.find_simplex((white_xyz * t_mid)[None])[0] >= 0:
@@ -506,10 +379,9 @@ def compute_y_scale(
         else:
             t_hi = t_mid
 
-    if _own_tri:
+    if own_tri:
         del tri
-
-    return float(t_lo * 0.9999)   # tiny inward margin to avoid boundary glitches
+    return float(t_lo * 0.9999)
 
 
 # ---------------------------------------------------------------------------
@@ -517,7 +389,7 @@ def compute_y_scale(
 # ---------------------------------------------------------------------------
 
 def axis_values(grid_size: int, sample_scale: float) -> np.ndarray:
-    return np.linspace(0.0, sample_scale, grid_size, dtype=np.float64)
+    return build_lut_writer.axis_values(grid_size, sample_scale)
 
 
 def xyz_to_xy(xyz: np.ndarray) -> tuple[float, float]:
@@ -528,17 +400,6 @@ def xyz_to_xy(xyz: np.ndarray) -> tuple[float, float]:
 
 
 def _xyY_from_chroma_and_Y(chroma_xyz: np.ndarray, target_Y: np.ndarray) -> np.ndarray:
-    """Return XYZ with chromaticity from ``chroma_xyz`` and luminance ``target_Y``.
-
-    This is the key target-construction distinction for Mode 2:
-      * chromaticity should come from the calibrated/reference RGB target basis,
-      * Y should come from the physical/raw drive level so primaries and edges
-        keep their usable luminance/resolution instead of being globally WB-scaled.
-
-    Without this, dual-channel and skin/warm/cool targets inherit raw measured
-    same-drive chromaticity, which is exactly why cyan/magenta/yellow kept
-    landing on equal-drive states instead of the known calibrated anchors.
-    """
     chroma_xyz = np.asarray(chroma_xyz, dtype=np.float64)
     Y = np.asarray(target_Y, dtype=np.float64)
     denom = np.maximum(chroma_xyz.sum(axis=1), 1e-12)
@@ -553,14 +414,6 @@ def _xyY_from_chroma_and_Y(chroma_xyz: np.ndarray, target_Y: np.ndarray) -> np.n
 
 
 def _xyY_from_xy_and_Y(chroma_xy: np.ndarray, target_Y: np.ndarray) -> np.ndarray:
-    """Return XYZ with chromaticity from direct xy coordinates and luminance Y.
-
-    This is used by the target-space RGB transform.  The fitted transform maps
-    source linear RGB into measured-primary *xy barycentric* coordinates, so the
-    predicted xy must be used directly.  Converting those weights through a
-    unit-Y XYZ primary basis is a different model and was the cause of the large
-    yellow/orange/spring/rose target skew.
-    """
     xy = np.asarray(chroma_xy, dtype=np.float64)
     Y = np.asarray(target_Y, dtype=np.float64)
     out = np.zeros((len(xy), 3), dtype=np.float64)
@@ -573,17 +426,10 @@ def _xyY_from_xy_and_Y(chroma_xy: np.ndarray, target_Y: np.ndarray) -> np.ndarra
     return out
 
 
-
 # ---------------------------------------------------------------------------
 # Target RGB -> measured-primary chromaticity model
 # ---------------------------------------------------------------------------
 
-# Semantic colour anchors used to derive the source-RGB -> measured-primary
-# barycentric transform.  These are target-space coordinates, not measured LED
-# centroids.  The transform is fitted at build time against the *current*
-# measured primary centroids, so it adapts when the LED/wall/diffuser gamut
-# changes.  No gamma/transfer curve is applied here; input RGB is treated as
-# already linear-light, matching the HyperHDR pipeline before this LUT.
 _TARGET_XY_ANCHORS: list[tuple[str, tuple[int, int, int], tuple[float, float]]] = [
     ("yellow",     (65535, 60395, 3855), (0.445, 0.504)),
     ("orange",     (65535, 33924, 1799), (0.531, 0.436)),
@@ -594,7 +440,6 @@ _TARGET_XY_ANCHORS: list[tuple[str, tuple[int, int, int], tuple[float, float]]] 
 
 
 def _primary_xy_from_basis(rgb_basis: np.ndarray) -> np.ndarray:
-    """Return measured primary xy rows [R,G,B] from a 3x3 XYZ basis."""
     basis = np.asarray(rgb_basis, dtype=np.float64)
     out = np.zeros((3, 2), dtype=np.float64)
     for i in range(3):
@@ -606,7 +451,6 @@ def _primary_xy_from_basis(rgb_basis: np.ndarray) -> np.ndarray:
 
 
 def _unit_y_basis_from_primary_xy(primary_xy: np.ndarray) -> np.ndarray:
-    """Build a 3x3 XYZ(Y=1) basis whose columns are primary chromaticities."""
     cols: list[np.ndarray] = []
     for x, y in np.asarray(primary_xy, dtype=np.float64):
         if y <= 1e-12:
@@ -621,23 +465,6 @@ def fit_rgb_to_effective_bary_matrix(
     sample_scale: float = 65535.0,
     anchors: list[tuple[str, tuple[int, int, int], tuple[float, float]]] | None = None,
 ) -> np.ndarray:
-    """Fit a linear RGB->effective-measured-primary transform.
-
-    The solver needs target xy for the source RGB values it receives.  Directly
-    mixing the measured LED centroids by the input RGB tuple is wrong for the
-    current source RGB coordinate system: e.g. the RGB tuple for semantic
-    orange/yellow/rose is not the same as an LED-drive barycentric mix.
-
-    We therefore fit a signed 3x3 target-space matrix A such that:
-
-        q = linear_rgb @ A
-        target_xy = weighted_mix(measured_primary_xy, q)
-
-    This is still linear-light RGB.  It is a coloursystem/barycentric transform,
-    not a gamma or transfer curve.  The measured primary centroids are taken from
-    ``raw_rgb_basis`` at runtime, while the semantic anchor xy values define the
-    source colourspace convention we want the LUT to target.
-    """
     anchors = anchors or _TARGET_XY_ANCHORS
     primary_xy = _primary_xy_from_basis(raw_rgb_basis)
     rgbs = [np.asarray(rgb, dtype=np.float64) / float(sample_scale) for _name, rgb, _xy in anchors]
@@ -659,10 +486,6 @@ def fit_rgb_to_effective_bary_matrix(
 
     sol = least_squares(residual, np.eye(3, dtype=np.float64).ravel(), max_nfev=200000)
     A = sol.x.reshape(3, 3).astype(np.float64)
-
-    # The direct-xy barycentric model is invariant to a uniform scale applied to
-    # all coefficients.  Normalize the matrix so debug ``effective_r/g/b``
-    # values stay human-readable and comparable across builds.
     diag_scale = float(np.mean(np.abs(np.diag(A))))
     if np.isfinite(diag_scale) and diag_scale > 1e-12:
         A = A / diag_scale
@@ -678,71 +501,27 @@ def _target_xyz_from_effective_rgb_model(
     sample_scale: float,
     target_transform_matrix: np.ndarray | None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Construct target XYZ for the family solver.
-
-    The LUT verifier computes expected chromaticity directly from the
-    reference-white-balanced RGB basis stored in ``delaunay_lut_summary.json``:
-
-        xyz_expected = target_rgb_basis @ [R, G, B]
-        exp_xy       = xy(xyz_expected)
-
-    The solver must aim at that same chromaticity.  Earlier iterations routed
-    non-neutral colours through a fitted measured-primary xy/barycentric model,
-    while the verifier still used ``target_rgb_basis``.  That made the solver
-    and verifier disagree by huge amounts for HSV ramps, skin tones, warm/cool
-    whites, and dual-channel colours.
-
-    This function now uses the verifier-compatible basis for *all* RGB target
-    chromaticity.  For non-neutral colours, luminance is still taken from the
-    raw physical RGB basis so channel resolution/usable Y are not globally
-    white-balance-scaled.  Equal/nearly-equal RGB values still route through
-    ``xyz_neutral`` so the dedicated neutral solver can use the W-heavy measured
-    neutral path.
-
-    ``target_transform_matrix`` is intentionally ignored and kept only for API
-    compatibility with older worker/debug code.  No gamma/transfer curve is
-    applied here.
-
-    Returns ``(xyz_target, xyz_colour, xyz_raw, xyz_neutral)`` for probe
-    diagnostics.
-    """
     rgb_flat = np.asarray(rgb_flat, dtype=np.float64)
-
-    # Physical/raw RGB luminance basis.  This supplies Y for coloured targets.
     xyz_raw = rgb_flat @ raw_rgb_basis.T
-
-    # Verifier-compatible chromaticity basis.  This is what
-    # host_calibration_gui._verifier_expected_xy() derives from lut_summary.
     xyz_chroma = rgb_flat @ target_rgb_basis.T
-
-    # Neutral path uses the same target basis, scaled to the measured W/D65
-    # neutral endpoint selected by compute_y_scale().  xy is unchanged by this
-    # scale, but Y is what the neutral W solver should chase.
     xyz_neutral = xyz_chroma * float(y_scale)
 
-    # Non-neutral colour Y should not be globally scaled to the full neutral/W
-    # endpoint.  Exact primaries and duals need raw physical edge Y so the solver
-    # does not chase impossible brightness by inflating the stronger diode.  For
-    # mixed min(rgb)>0 rows, blend toward common-neutral + residual Y so W-axis
-    # candidates have enough luminance authority without pinning dual-channel
-    # edges to a white-scaled target.
     target_Y_colour = np.maximum(xyz_raw[:, 1].copy(), 0.0)
     if len(rgb_flat):
-        _ch_max = np.maximum(np.max(rgb_flat, axis=1), 1.0)
-        _common = np.minimum.reduce([rgb_flat[:, 0], rgb_flat[:, 1], rgb_flat[:, 2]])
-        _common_frac = np.clip(_common / _ch_max, 0.0, 1.0)
-        _all3 = (rgb_flat[:, 0] > 0.0) & (rgb_flat[:, 1] > 0.0) & (rgb_flat[:, 2] > 0.0) & (_common > 0.0)
-        _common_y_gate = np.clip((_common_frac - 0.035) / 0.285, 0.0, 1.0) * _all3.astype(np.float64)
-        if np.any(_common_y_gate > 0.0):
-            _common_rgb = np.column_stack([_common, _common, _common])
-            _resid_rgb = np.maximum(rgb_flat - _common[:, None], 0.0)
-            _common_neutral_Y = (_common_rgb @ target_rgb_basis.T)[:, 1] * float(y_scale)
-            _resid_raw_Y = (_resid_rgb @ raw_rgb_basis.T)[:, 1]
-            _mixed_Y = np.maximum(_resid_raw_Y + _common_neutral_Y, 0.0)
-            target_Y_colour = target_Y_colour * (1.0 - _common_y_gate) + _mixed_Y * _common_y_gate
+        ch_max = np.maximum(np.max(rgb_flat, axis=1), 1.0)
+        common = np.minimum.reduce([rgb_flat[:, 0], rgb_flat[:, 1], rgb_flat[:, 2]])
+        common_frac = np.clip(common / ch_max, 0.0, 1.0)
+        all3 = (rgb_flat[:, 0] > 0.0) & (rgb_flat[:, 1] > 0.0) & (rgb_flat[:, 2] > 0.0) & (common > 0.0)
+        common_y_gate = np.clip((common_frac - 0.035) / 0.285, 0.0, 1.0) * all3.astype(np.float64)
+        if np.any(common_y_gate > 0.0):
+            common_rgb = np.column_stack([common, common, common])
+            resid_rgb = np.maximum(rgb_flat - common[:, None], 0.0)
+            common_neutral_Y = (common_rgb @ target_rgb_basis.T)[:, 1] * float(y_scale)
+            resid_raw_Y = (resid_rgb @ raw_rgb_basis.T)[:, 1]
+            mixed_Y = np.maximum(resid_raw_Y + common_neutral_Y, 0.0)
+            target_Y_colour = target_Y_colour * (1.0 - common_y_gate) + mixed_Y * common_y_gate
 
     xyz_colour = _xyY_from_chroma_and_Y(xyz_chroma, target_Y_colour)
-
     bad_colour = (~np.isfinite(xyz_colour).all(axis=1)) | (xyz_colour[:, 1] <= 0.0)
     if np.any(bad_colour):
         xyz_colour[bad_colour] = xyz_raw[bad_colour]
@@ -1347,29 +1126,7 @@ def build_family_capture_sets(
     xyz_points: np.ndarray,   # (N, 3)  — all deduplicated capture XYZ
     rgbw_points: np.ndarray,  # (N, 4)  — corresponding RGBW drives
 ) -> dict[str, tuple[np.ndarray, np.ndarray]]:
-    """Partition the capture cloud by emitter family.
-
-    A capture belongs to family 'rg' when R>0, G>0, B==0, W==0, etc.
-    Exact-zero thresholding is used since drive values are integer counts.
-
-    Returns dict mapping family_key → (xyz_sub, rgbw_sub).  Families with
-    fewer than 5 captures (insufficient for 3-D Delaunay) are still included;
-    the worker-side builder falls back to cKDTree for those.
-    """
-    R, G, B, W = (rgbw_points[:, i] for i in range(4))
-    sets: dict[str, tuple[np.ndarray, np.ndarray]] = {}
-    for fk, rgb_mask, uses_w in _FAMILY_DEFS:
-        r_on = bool(rgb_mask & 0b001)
-        g_on = bool(rgb_mask & 0b010)
-        b_on = bool(rgb_mask & 0b100)
-        m = np.ones(len(xyz_points), dtype=bool)
-        m &= (R > 0) if r_on else (R == 0)
-        m &= (G > 0) if g_on else (G == 0)
-        m &= (B > 0) if b_on else (B == 0)
-        m &= (W > 0) if uses_w else (W == 0)
-        if m.any():
-            sets[fk] = (xyz_points[m], rgbw_points[m])
-    return sets
+    return capture_loaders.build_family_capture_sets(xyz_points, rgbw_points, family_defs=_FAMILY_DEFS)
 
 
 def _bary_interp_vectorised(
@@ -1636,48 +1393,7 @@ def _mixed_local_expected_w_vectorised(
 
 
 def _available_memory_bytes() -> int | None:
-    """Return currently available system RAM in bytes, or None if unknown.
-
-    Used only to size measured-anchor candidate batches.  Prefer psutil when
-    present, but keep a ctypes/sysconf fallback so the builder stays dependency
-    free on Windows and Linux.
-    """
-    try:
-        import psutil  # type: ignore
-        return int(psutil.virtual_memory().available)
-    except Exception:
-        pass
-
-    if os.name == "nt":
-        try:
-            import ctypes
-
-            class MEMORYSTATUSEX(ctypes.Structure):
-                _fields_ = [
-                    ("dwLength", ctypes.c_ulong),
-                    ("dwMemoryLoad", ctypes.c_ulong),
-                    ("ullTotalPhys", ctypes.c_ulonglong),
-                    ("ullAvailPhys", ctypes.c_ulonglong),
-                    ("ullTotalPageFile", ctypes.c_ulonglong),
-                    ("ullAvailPageFile", ctypes.c_ulonglong),
-                    ("ullTotalVirtual", ctypes.c_ulonglong),
-                    ("ullAvailVirtual", ctypes.c_ulonglong),
-                    ("sullAvailExtendedVirtual", ctypes.c_ulonglong),
-                ]
-
-            stat = MEMORYSTATUSEX()
-            stat.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
-            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
-                return int(stat.ullAvailPhys)
-        except Exception:
-            return None
-
-    try:
-        pages = os.sysconf("SC_AVPHYS_PAGES")
-        page_size = os.sysconf("SC_PAGE_SIZE")
-        return int(pages * page_size)
-    except Exception:
-        return None
+    return build_diagnostics.available_memory_bytes()
 
 
 def _auto_measured_candidate_axis_cap(
@@ -1685,50 +1401,13 @@ def _auto_measured_candidate_axis_cap(
     requested_axis: int,
     want_scaled_candidates: bool,
 ) -> int:
-    """Choose measured-anchor candidate axis from available RAM and workers.
-
-    v20.4 fixed the OOM by hard-capping raw+scaled candidates to 64.  That was
-    safe but unnecessarily conservative on high-RAM systems or when using fewer
-    workers.  This keeps the same memory safety goal, but lets the cap rise up
-    toward ``--knn-max-candidate-axis`` when the machine has enough free RAM.
-
-    The cap is the final candidate axis after raw+scaled concatenation.  When
-    scaled candidates are enabled, the caller queries approximately half this
-    number of raw anchors and then appends their scaled versions.
-    """
-    requested_axis = max(1, int(requested_axis))
-    if n_rows <= 0:
-        return requested_axis
-
-    args = _worker_state.get("args") if isinstance(_worker_state, dict) else None
-    hard_cap = int(getattr(args, "knn_max_candidate_axis", 160))
-    min_axis = int(getattr(args, "knn_min_candidate_axis", 32))
-    mem_fraction = float(getattr(args, "knn_memory_fraction", 0.50))
-    bytes_per = float(getattr(args, "knn_bytes_per_row_candidate", 112.0))
-    workers = int(_worker_state.get("worker_count", 0) or getattr(args, "workers", 0) or (os.cpu_count() or 1))
-
-    hard_cap = max(1, hard_cap)
-    min_axis = max(1, min_axis)
-    mem_fraction = float(np.clip(mem_fraction, 0.05, 0.90))
-    bytes_per = max(32.0, bytes_per)
-    workers = max(1, workers)
-
-    base_cap = min(requested_axis, hard_cap)
-    avail = _available_memory_bytes()
-    if avail is None or avail <= 0:
-        return max(1, min(base_cap, max(min_axis, base_cap)))
-
-    # Divide the shared RAM budget by the number of simultaneously active
-    # workers.  Keep at least a small per-worker budget so low-memory readings
-    # do not collapse K to 1 unless the machine is truly under pressure.
-    per_worker_budget = max(1.0, (float(avail) * mem_fraction) / float(workers))
-    mem_cap = int(per_worker_budget // (float(n_rows) * bytes_per))
-    mem_cap = max(1, mem_cap)
-
-    cap = min(base_cap, mem_cap)
-    if mem_cap >= min_axis and base_cap >= min_axis:
-        cap = max(cap, min_axis)
-    return max(1, cap)
+    del want_scaled_candidates
+    return build_diagnostics.auto_measured_candidate_axis_cap(
+        n_rows,
+        requested_axis,
+        args=_worker_state.get("args") if isinstance(_worker_state, dict) else None,
+        worker_count=int(_worker_state.get("worker_count", 0) or 0) if isinstance(_worker_state, dict) else None,
+    )
 
 
 def _knn_best_measured_keyed_vectorised(
@@ -2024,88 +1703,12 @@ def _ratio_anchor_tile_shape(
     n_rows: int,
     requested_k: int,
 ) -> tuple[int, int, int]:
-    """Choose row/K tile sizes for streaming ratio-anchor scoring.
-
-    ``requested_k`` is search coverage and is never reduced here.  Available
-    memory only controls how many rows and candidate neighbours are evaluated
-    at once.  This avoids making candidate quality depend on worker count while
-    still respecting the current system RAM budget and ``--knn-memory-fraction``.
-    """
-    n_rows = max(1, int(n_rows))
-    requested_k = max(1, int(requested_k))
-
-    args = _worker_state.get("args") if isinstance(_worker_state, dict) else None
-    mem_fraction = float(getattr(args, "knn_memory_fraction", 0.50))
-    workers = int(_worker_state.get("worker_count", 0) or getattr(args, "workers", 0) or (os.cpu_count() or 1))
-    mem_fraction = float(np.clip(mem_fraction, 0.05, 0.90))
-    workers = max(1, workers)
-
-    avail = _available_memory_bytes()
-    if avail is None or avail <= 0:
-        # If the platform cannot report available memory, keep full search
-        # coverage and rely on modest streaming tiles rather than reducing K.
-        return min(n_rows, max(1, int(math.ceil(n_rows / float(workers))))), requested_k, -1
-
-    budget = max(1.0, (float(avail) * mem_fraction) / float(workers))
-
-    f8 = np.dtype(np.float64).itemsize
-    i8 = np.dtype(np.intp).itemsize
-    b1 = np.dtype(np.bool_).itemsize
-
-    # Persistent per-row output/best arrays in _find_scaled_ratio_anchor_vectorised.
-    # This includes RGBW/XYZ/source/score/diagnostic arrays and some overhead for
-    # temporary row vectors.  It is intentionally estimated from dtype sizes, not
-    # a fixed MiB floor.
-    row_state_bytes = (
-        (4 + 3 + 4 + 3) * f8 +      # best rgbw/xyz/source rgbw/source xyz
-        (7 * f8) +                  # score, scale, de, xy, yerr, resid, leak
-        (3 * f8) +                  # leak ratio/excess plus scratch
-        (3 * np.dtype(np.int32).itemsize) +
-        (2 * b1)
+    return build_diagnostics.ratio_anchor_tile_shape(
+        n_rows,
+        requested_k,
+        args=_worker_state.get("args") if isinstance(_worker_state, dict) else None,
+        worker_count=int(_worker_state.get("worker_count", 0) or 0) if isinstance(_worker_state, dict) else None,
     )
-
-    # Per row x requested_k neighbour-index matrix for the row tile.  We keep
-    # this separate from candidate scoring so each row still sees the full K.
-    index_bytes_per_row = requested_k * i8
-
-    # Approximate largest simultaneous per row-candidate footprint inside one
-    # candidate tile.  This accounts for gathered anchors, scaled RGBW/XYZ, Lab,
-    # score/error terms, scale caps, finite masks and leakage terms.
-    bytes_per_row_k_tile = (
-        (3 + 4) * f8 +              # gathered xyz/rgbw anchors
-        (3 + 4) * f8 +              # scaled xyz/rgbw candidates
-        (3 * f8) +                  # Lab candidate
-        (9 * f8) +                  # xy/yerr/de/resid/score/scale/temp terms
-        (2 * b1) + i8               # finite/bool masks and index scratch
-    )
-
-    def estimate(row_tile: int, k_tile: int) -> float:
-        return (
-            row_tile * row_state_bytes +
-            row_tile * index_bytes_per_row +
-            row_tile * k_tile * bytes_per_row_k_tile
-        )
-
-    # Prefer larger row tiles for fewer KD queries, then stream candidate-K
-    # windows inside each row tile.  Shrink rows only when the full neighbour
-    # index matrix plus a single candidate column cannot fit.
-    row_tile = n_rows
-    while row_tile > 1 and estimate(row_tile, 1) > budget:
-        row_tile = max(1, row_tile // 2)
-
-    remaining = budget - (row_tile * row_state_bytes + row_tile * index_bytes_per_row)
-    if remaining <= 0.0:
-        k_tile = 1
-    else:
-        k_tile = int(remaining // max(1.0, row_tile * bytes_per_row_k_tile))
-        k_tile = max(1, min(requested_k, k_tile))
-
-    # If the chosen row tile leaves enough memory for more candidate columns,
-    # use as many as possible up to requested_k.  This affects runtime only.
-    while k_tile < requested_k and estimate(row_tile, min(requested_k, k_tile * 2)) <= budget:
-        k_tile = min(requested_k, k_tile * 2)
-
-    return max(1, row_tile), max(1, k_tile), int(budget)
 
 
 def _find_scaled_ratio_anchor_vectorised(
@@ -4931,58 +4534,13 @@ def build_feedback_candidate_model_from_observations(
 
 
 def load_feedback_candidate_model_for_args(args: argparse.Namespace) -> dict | None:
-    """Load active measured feedback candidates from a v2 bank or verifier CSVs.
-
-    The model is only loaded for feedback-mode candidate/reevaluate.  It is safe
-    to pass through worker state because it contains only compact exact-key
-    dictionaries, not the full verifier CSVs.
-    """
-    mode = str(getattr(args, "feedback_mode", "diagnostic") or "diagnostic").lower()
-    if mode not in {"candidate", "reevaluate"}:
-        return None
-
-    dE_threshold = float(getattr(args, "feedback_trust_pass_dE", 2.5))
-    observations: list[dict] = []
-
-    # Prefer an explicit/non-auto bank if present.  Auto banks are still used if
-    # they exist under config/dictionaries/<display_id>/.
-    bank_arg = str(getattr(args, "feedback_bank", "auto") or "auto")
-    bank_paths: list[Path] = []
-    if bank_arg and bank_arg.lower() != "auto":
-        bank_paths.append(Path(bank_arg))
-    else:
-        display_id = _safe_profile_id(getattr(args, "display_id", "") or getattr(args, "display_profile", "default_display") or "default_display")
-        try:
-            bank_paths.append(_feedback_bank_paths(args, display_id)[0])
-        except Exception:
-            pass
-
-    for bp in bank_paths:
-        try:
-            if bp.exists():
-                observations.extend(_iter_feedback_bank_observations(json.loads(bp.read_text(encoding="utf-8"))))
-        except Exception:
-            pass
-
-    # Also allow direct verifier CSV directories.  This lets the replay harness
-    # and early correction work without requiring a prebuilt bank.
-    verifier_dir = getattr(args, "verifier_diagnostics_dir", None)
-    if verifier_dir:
-        try:
-            vd = Path(verifier_dir)
-            if vd.exists() and vd.is_dir():
-                for csv_path in sorted(vd.glob("family_hull_latest_quick_verify*.csv")):
-                    with csv_path.open("r", newline="", encoding="utf-8", errors="replace") as fh:
-                        for row in csv.DictReader(fh):
-                            obs = _feedback_obs_from_verifier_row(row, csv_path.name, dE_threshold)
-                            if obs is not None:
-                                observations.append(obs)
-        except Exception:
-            pass
-
-    if not observations:
-        return None
-    return build_feedback_candidate_model_from_observations(observations, dE_threshold=dE_threshold)
+    return correction_pass_fail_dictionary.load_feedback_candidate_model_for_args(
+        args,
+        default_config_dir=DEFAULT_CONFIG_DIR,
+        iter_feedback_bank_observations=_iter_feedback_bank_observations,
+        feedback_obs_from_verifier_row=_feedback_obs_from_verifier_row,
+        build_feedback_candidate_model_from_observations=build_feedback_candidate_model_from_observations,
+    )
 
 
 def _apply_feedback_candidate_overrides(
@@ -5739,8 +5297,7 @@ def build_delaunay_cube(
     compatibility and are not used here.
     """
     grid_size = axis.size
-    n_workers = max(1, args.workers or (os.cpu_count() or 1))
-    n_workers = min(n_workers, grid_size)
+    n_workers = build_live_measured.resolve_worker_count(args.workers, grid_size)
 
     if family_bases is None:
         family_bases = {}
@@ -5760,21 +5317,19 @@ def build_delaunay_cube(
             flush=True,
         )
 
-    state = {
-        "axis":                axis,
-        "target_rgb_basis":    target_rgb_basis,
-        "raw_rgb_basis":       _raw_basis_for_target,
-        "target_transform_matrix": target_transform_matrix,
-        "family_bases":        family_bases,
-        "family_capture_xyz":  {fk: v[0] for fk, v in family_capture_sets.items()},
-        "family_capture_rgbw": {fk: v[1] for fk, v in family_capture_sets.items()},
-        "white_xyz_ref":       white_xyz_ref,
-        "reference_white":     reference_white,
-        "y_scale":             float(y_scale),
-        "args":                args,
-        "worker_count":        n_workers,
-        "feedback_candidate_model": feedback_candidate_model,
-    }
+    state = build_live_measured.build_delaunay_process_state(
+        axis=axis,
+        target_rgb_basis=target_rgb_basis,
+        raw_rgb_basis=_raw_basis_for_target,
+        family_capture_sets=family_capture_sets,
+        white_xyz_ref=white_xyz_ref,
+        reference_white=reference_white,
+        y_scale=float(y_scale),
+        args=args,
+        worker_count=n_workers,
+        feedback_candidate_model=feedback_candidate_model,
+        target_transform_matrix=target_transform_matrix,
+    )
     jobs = [
         (r_index, float(axis[r_index]), build_comparison)
         for r_index in range(grid_size)
@@ -5843,12 +5398,7 @@ def build_delaunay_cube(
 # ---------------------------------------------------------------------------
 
 def write_comparison_csv(rows: list[dict], output_path: Path) -> None:
-    if not rows:
-        return
-    with output_path.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
-        writer.writeheader()
-        writer.writerows(rows)
+    build_lut_writer.write_comparison_csv(rows, output_path)
 
 
 def _csv_float(row: dict, *names: str, default: float = float("nan")) -> float:
@@ -5889,125 +5439,24 @@ def _read_csv_rows_safe(path: Path) -> list[dict]:
 # Display-scoped verifier feedback bank (diagnostic pass/fail memory)
 # ---------------------------------------------------------------------------
 
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-
-
-def _safe_profile_id(value: str | None) -> str:
-    text = str(value or "").strip()
-    if not text:
-        text = "default_display"
-    # Path-like profile arguments use the filename stem as the display id.
-    text = Path(text).stem if any(sep in text for sep in ("/", "\\")) else text
-    safe = "".join(ch.lower() if ch.isalnum() else "_" for ch in text)
-    safe = "_".join(part for part in safe.split("_") if part)
-    return safe or "default_display"
-
-
-def _json_sanitize(value):
-    """Recursively convert numpy scalars and NaN/Inf to JSON-safe values."""
-    if isinstance(value, dict):
-        return {str(k): _json_sanitize(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_json_sanitize(v) for v in value]
-    if isinstance(value, set):
-        return sorted(_json_sanitize(v) for v in value)
-    if isinstance(value, np.generic):
-        return _json_sanitize(value.item())
-    if isinstance(value, float):
-        return value if math.isfinite(value) else None
-    if isinstance(value, (int, str, bool)) or value is None:
-        return value
-    return str(value)
-
-
-def _xyY_to_XYZ(x: float, y: float, Y: float) -> tuple[float | None, float | None, float | None]:
-    if not (np.isfinite(x) and np.isfinite(y) and np.isfinite(Y)) or y <= 1e-12 or Y < 0.0:
-        return None, None, None
-    X = (x * Y) / y
-    Z = ((1.0 - x - y) * Y) / y
-    return float(X), float(Y), float(Z)
-
-
-def _profile_path_from_args(args: argparse.Namespace) -> tuple[Path, str]:
-    config_dir = Path(getattr(args, "config_dir", DEFAULT_CONFIG_DIR))
-    profile_arg = str(getattr(args, "display_profile", "default_display") or "default_display")
-    explicit_id = str(getattr(args, "display_id", "") or "").strip()
-
-    maybe_path = Path(profile_arg)
-    if maybe_path.suffix.lower() == ".json" or maybe_path.is_absolute() or any(sep in profile_arg for sep in ("/", "\\")):
-        profile_path = maybe_path if maybe_path.is_absolute() else (config_dir / "profiles" / maybe_path)
-        display_id = _safe_profile_id(explicit_id or profile_path.stem)
-    else:
-        display_id = _safe_profile_id(explicit_id or profile_arg)
-        profile_path = config_dir / "profiles" / f"{display_id}.json"
-    return profile_path, display_id
-
 
 def load_or_create_display_profile(
     args: argparse.Namespace,
     reference_white: ReferenceWhite,
 ) -> tuple[dict, Path]:
-    """Load or create the active display profile.
-
-    The profile is intentionally lightweight in this first pass.  Its main job
-    is to scope verifier feedback banks so pass/fail memory from one physical
-    display does not silently affect another display later.
-    """
-    profile_path, display_id = _profile_path_from_args(args)
-    now = _utc_now_iso()
-    profile: dict = {}
-    if profile_path.exists():
-        try:
-            profile = json.loads(profile_path.read_text(encoding="utf-8"))
-        except Exception:
-            profile = {}
-
-    if not profile:
-        profile = {
-            "schema_version": 1,
-            "display_id": display_id,
-            "display_name": display_id,
-            "created_at": now,
-            "notes": "",
-        }
-
-    profile["schema_version"] = int(profile.get("schema_version", 1) or 1)
-    profile["display_id"] = _safe_profile_id(str(profile.get("display_id") or display_id))
-    profile["last_used_at"] = now
-    profile.setdefault("display_name", profile["display_id"])
-    profile["reference_white"] = {
-        "x": float(reference_white.x),
-        "y": float(reference_white.y),
-        "Y": float(reference_white.Y),
-    }
-    profile["builder_profile"] = {
-        "sample_scale": float(getattr(args, "sample_scale", 65535.0)),
-        "target_white_balance_mode": str(getattr(args, "target_white_balance_mode", "reference-white")),
-    }
-    profile["paths"] = {
-        "input_dir": str(getattr(args, "input_dir", "")),
-        "config_dir": str(getattr(args, "config_dir", DEFAULT_CONFIG_DIR)),
-    }
-
-    profile_path.parent.mkdir(parents=True, exist_ok=True)
-    profile_path.write_text(json.dumps(_json_sanitize(profile), indent=2), encoding="utf-8")
-    setattr(args, "display_id", profile["display_id"])
-    setattr(args, "display_profile_path", str(profile_path))
-    return profile, profile_path
+    return correction_pass_fail_dictionary.load_or_create_display_profile(
+        args,
+        reference_white,
+        default_config_dir=DEFAULT_CONFIG_DIR,
+    )
 
 
 def _feedback_bank_paths(args: argparse.Namespace, display_id: str) -> tuple[Path, Path, Path, Path]:
-    config_dir = Path(getattr(args, "config_dir", DEFAULT_CONFIG_DIR))
-    bank_arg = str(getattr(args, "feedback_bank", "auto") or "auto")
-    dict_dir = config_dir / "dictionaries" / _safe_profile_id(display_id)
-    if bank_arg.lower() != "auto":
-        bank_path = Path(bank_arg)
-        if not bank_path.is_absolute():
-            bank_path = dict_dir / bank_path
-    else:
-        bank_path = dict_dir / "verifier_feedback_bank.json"
-    return bank_path, dict_dir / "verifier_pass_bank.json", dict_dir / "verifier_fail_bank.json", dict_dir / "sessions"
+    return correction_pass_fail_dictionary.feedback_bank_paths(
+        args,
+        display_id,
+        default_config_dir=DEFAULT_CONFIG_DIR,
+    )
 
 
 def _verifier_row_key(row: dict) -> tuple[int, int, int, str]:
@@ -6078,7 +5527,7 @@ def _resolve_best_capture_xyz(best: dict | None, search_dirs: list[Path]) -> dic
     cap_x = float(out.get("cap_x", float("nan")))
     cap_y = float(out.get("cap_y", float("nan")))
     cap_Y = float(out.get("cap_Y", float("nan")))
-    X, Y, Z = _xyY_to_XYZ(cap_x, cap_y, cap_Y)
+    X, Y, Z = correction_pass_fail_dictionary.xyY_to_XYZ(cap_x, cap_y, cap_Y)
     out["cap_X"] = X
     out["cap_Z"] = Z
     out["XYZ_source"] = "reconstructed_from_xyY" if X is not None else "unavailable"
@@ -6117,43 +5566,6 @@ def _resolve_best_capture_xyz(best: dict | None, search_dirs: list[Path]) -> dic
             out["resolved_capture_path"] = str(cap_file)
             return out
     return out
-
-
-def _channel_direction_hints_from_rows(rows: list[dict], best_capture: dict | None = None) -> dict:
-    hints = {"r": "hold", "g": "hold", "b": "hold", "w": "hold"}
-    if best_capture is not None and rows:
-        # Compare best capture to the most recent LUT output for an actionable
-        # move direction.  This is intentionally diagnostic-only in this pass.
-        latest = rows[-1]
-        for ch, lut_name, cap_name in (
-            ("r", "lut_r", "cap_r16"),
-            ("g", "lut_g", "cap_g16"),
-            ("b", "lut_b", "cap_b16"),
-            ("w", "lut_w", "cap_w16"),
-        ):
-            cur = float(latest.get(lut_name, 0.0) or 0.0)
-            tgt = float(best_capture.get(cap_name, cur) or cur)
-            if tgt > cur + 512.0:
-                hints[ch] = "raise"
-            elif cur > tgt + 512.0:
-                hints[ch] = "lower"
-        return hints
-
-    # Fallback to aggregate string flags when no best capture is available.
-    counts: dict[str, dict[str, int]] = {c: {"raise": 0, "lower": 0} for c in hints}
-    for row in rows:
-        for token in str(row.get("channel_direction_hints", "")).split("|"):
-            token = token.strip()
-            if token.startswith("raise_") and token[-1:] in counts:
-                counts[token[-1]]["raise"] += 1
-            elif token.startswith("lower_") and token[-1:] in counts:
-                counts[token[-1]]["lower"] += 1
-    for ch, c in counts.items():
-        if c["raise"] > c["lower"]:
-            hints[ch] = "raise"
-        elif c["lower"] > c["raise"]:
-            hints[ch] = "lower"
-    return hints
 
 
 def _parse_verifier_feedback_rows(verifier_dir: Path, dE_threshold: float) -> tuple[list[dict], dict[str, list[dict]]]:
@@ -6302,7 +5714,7 @@ def _feedback_result_id(row: dict) -> str:
         "selected_family": row.get("selected_family", ""),
         "selected_route": row.get("selected_route", ""),
     }
-    blob = json.dumps(_json_sanitize(payload), sort_keys=True, separators=(",", ":"))
+    blob = json.dumps(correction_pass_fail_dictionary.json_sanitize(payload), sort_keys=True, separators=(",", ":"))
     return hashlib.sha1(blob.encode("utf-8", errors="replace")).hexdigest()[:20]
 
 
@@ -6312,7 +5724,7 @@ def _feedback_target_xyz(target: dict) -> list[float | None] | None:
     Y = _finite_or_none(target.get("Y"))
     if x is None or y is None or Y is None:
         return None
-    X, Y2, Z = _xyY_to_XYZ(x, y, Y)
+    X, Y2, Z = correction_pass_fail_dictionary.xyY_to_XYZ(x, y, Y)
     return [X, Y2, Z] if X is not None else None
 
 
@@ -6322,7 +5734,7 @@ def _feedback_measured_xyz(measured: dict) -> list[float | None] | None:
     Y = _finite_or_none(measured.get("Y"))
     if x is None or y is None or Y is None:
         return None
-    X, Y2, Z = _xyY_to_XYZ(x, y, Y)
+    X, Y2, Z = correction_pass_fail_dictionary.xyY_to_XYZ(x, y, Y)
     return [X, Y2, Z] if X is not None else None
 
 
@@ -6425,7 +5837,7 @@ def _legacy_feedback_observations(prev: dict, now: str) -> list[dict]:
         return []
     rgb_key = str(prev.get("rgb_key", ""))
     payload = {
-        "observation_id": "legacy_" + hashlib.sha1(json.dumps(_json_sanitize(latest), sort_keys=True).encode("utf-8", errors="replace")).hexdigest()[:16],
+        "observation_id": "legacy_" + hashlib.sha1(json.dumps(correction_pass_fail_dictionary.json_sanitize(latest), sort_keys=True).encode("utf-8", errors="replace")).hexdigest()[:16],
         "schema_source": "legacy_v1_latest_result",
         "first_seen_at": prev.get("updated_at") or now,
         "last_seen_at": prev.get("updated_at") or now,
@@ -6581,269 +5993,25 @@ def write_verifier_feedback_bank(
     *,
     dE_threshold: float = 2.5,
 ) -> dict | None:
-    """Write/merge display-scoped pass/fail verifier feedback dictionaries.
-
-    Schema v2 keeps every unique verifier observation per RGB key instead of
-    collapsing the key into one latest/best capture.  That is required for the
-    future correction pass because the same RGB key may have both overshooting
-    and undershooting failures across sessions/builds.
-    """
-    verifier_dir = Path(verifier_dir)
-    if not verifier_dir.exists() or not verifier_dir.is_dir():
-        return None
-
-    display_id = _safe_profile_id(display_profile.get("display_id", getattr(args, "display_id", "default_display")))
-    bank_path, pass_path, fail_path, sessions_dir = _feedback_bank_paths(args, display_id)
-    sessions_dir.mkdir(parents=True, exist_ok=True)
-    bank_path.parent.mkdir(parents=True, exist_ok=True)
-
-    verifier_rows, target_match_by_key = _parse_verifier_feedback_rows(verifier_dir, dE_threshold)
-    if not verifier_rows:
-        return None
-
-    search_dirs: list[Path] = []
-    for p in (getattr(args, "input_dir", None), verifier_dir, verifier_dir.parent, output_dir):
-        if p:
-            try:
-                search_dirs.append(Path(p))
-            except Exception:
-                pass
-
-    # Keep multiple target-match candidates per RGB key.  The first entry is
-    # still the best capture, but the full list gives the later correction code
-    # alternate anchors across low/mid/high Y instead of one collapsed target.
-    target_candidates_by_key: dict[str, list[dict]] = {
-        key: _resolve_target_match_candidates(matches, search_dirs, max_candidates=12)
-        for key, matches in target_match_by_key.items()
-    }
-
-    by_key: dict[str, list[dict]] = {}
-    for row in verifier_rows:
-        by_key.setdefault(row["rgb_key"], []).append(row)
-
-    now = _utc_now_iso()
-    session_id = now.replace("+00:00", "Z").replace(":", "").replace("-", "")
-    session_summary = {
-        "session_id": session_id,
-        "created_at": now,
-        "display_id": display_id,
-        "verifier_dir": str(verifier_dir),
-        "dE_threshold": dE_threshold,
-        "rows": len(verifier_rows),
-        "pass_rows": sum(1 for r in verifier_rows if r["status"] == "pass"),
-        "fail_rows": sum(1 for r in verifier_rows if r["status"] == "fail"),
-        "unique_rgb": len(by_key),
-    }
-
-    existing: dict = {}
-    if bank_path.exists():
-        try:
-            existing = json.loads(bank_path.read_text(encoding="utf-8"))
-        except Exception:
-            existing = {}
-
-    existing_entries = existing.get("entries", {}) if isinstance(existing, dict) else {}
-    bank = {
-        "schema_version": 2,
-        "diagnostic_only": True,
-        "display_id": display_id,
-        "display_profile": display_profile,
-        "created_at": existing.get("created_at", now) if isinstance(existing, dict) else now,
-        "updated_at": now,
-        "feedback_mode": str(getattr(args, "feedback_mode", "diagnostic")),
-        "dE_threshold": dE_threshold,
-        "sessions": list(existing.get("sessions", [])) if isinstance(existing, dict) else [],
-        "entries": {},
-    }
-    bank["sessions"].append(session_summary)
-    bank["sessions"] = bank["sessions"][-48:]
-
-    detail_rows: list[dict] = []
-    session_entries: dict[str, dict] = {}
-
-    # Start by migrating/preserving existing entries, including schema v1.
-    for key, prev in existing_entries.items() if isinstance(existing_entries, dict) else []:
-        if not isinstance(prev, dict):
-            continue
-        observations = _legacy_feedback_observations(prev, now)
-        observations = sorted(observations, key=_observation_sort_key)
-        pass_stats, fail_stats, latest_result = _build_feedback_entry_stats(observations)
-        bank["entries"][key] = {
-            **{k: v for k, v in prev.items() if k not in ("pass_stats", "fail_stats", "latest_result", "observations")},
-            "schema_version": 2,
-            "rgb_key": key,
-            "display_id": display_id,
-            "observations": observations,
-            "observation_count": len(observations),
-            "pass_stats": pass_stats,
-            "fail_stats": fail_stats,
-            "latest_result": latest_result,
-        }
-
-    for key, rows_for_key in sorted(by_key.items()):
-        input_rgb = rows_for_key[-1]["input_rgb"]
-        prev_entry = bank["entries"].get(key, {})
-        existing_obs_list = prev_entry.get("observations", []) if isinstance(prev_entry, dict) else []
-        obs_by_id: dict[str, dict] = {
-            str(o.get("observation_id")): dict(o)
-            for o in existing_obs_list
-            if isinstance(o, dict) and o.get("observation_id")
-        }
-
-        target_candidates = target_candidates_by_key.get(key, [])
-        best_capture = target_candidates[0] if target_candidates else None
-        session_obs_ids: list[str] = []
-
-        for row in rows_for_key:
-            oid = _feedback_result_id(row)
-            hints = _channel_direction_hints_for_observation(row, best_capture)
-            mx, my, mY = row["measured"].get("x"), row["measured"].get("y"), row["measured"].get("Y")
-            observation = {
-                "schema_version": 2,
-                "observation_id": oid,
-                "first_seen_at": now,
-                "last_seen_at": now,
-                "seen_count": 1,
-                "sessions": [session_id],
-                "rgb_key": key,
-                "display_id": display_id,
-                "input_rgb": row["input_rgb"],
-                "input_mask": row.get("input_mask"),
-                "input_common_min": row.get("input_common_min"),
-                "input_max": row.get("input_max"),
-                "target": row["target"],
-                "target_XYZ": _feedback_target_xyz(row["target"]),
-                "measured_xyY": [mx, my, mY],
-                "measured_XYZ": _feedback_measured_xyz(row["measured"]),
-                "xy_dx": row.get("xy_dx"),
-                "xy_dy": row.get("xy_dy"),
-                "dE": row.get("verifier_dE"),
-                "status": row.get("status"),
-                "ok": bool(row.get("ok")),
-                "lut_rgbw": row.get("lut_rgbw"),
-                "lut_r": row.get("lut_r"),
-                "lut_g": row.get("lut_g"),
-                "lut_b": row.get("lut_b"),
-                "lut_w": row.get("lut_w"),
-                "out_rgb_max": row.get("out_rgb_max"),
-                "out_w_to_common": row.get("out_w_to_common"),
-                "selected_family": row.get("selected_family", ""),
-                "selected_route": row.get("selected_route", ""),
-                "source_file": row.get("source_file", ""),
-                "patch": row.get("patch", ""),
-                "failure_flags": list(row.get("failure_flags", [])),
-                "channel_direction_hints": hints,
-                "capture_delta_rgbw": _feedback_capture_delta(row, best_capture),
-                "best_capture": best_capture,
-                "target_match_candidates": target_candidates,
-            }
-            _merge_feedback_observation(obs_by_id, observation, session_id, now)
-            session_obs_ids.append(oid)
-
-        observations = sorted(obs_by_id.values(), key=_observation_sort_key)
-        pass_stats, fail_stats, latest_result = _build_feedback_entry_stats(observations)
-        entry = {
-            "schema_version": 2,
-            "rgb_key": key,
-            "display_id": display_id,
-            "input_rgb": input_rgb,
-            "target": rows_for_key[-1]["target"],
-            "target_XYZ": _feedback_target_xyz(rows_for_key[-1]["target"]),
-            "latest_result": latest_result,
-            "pass_stats": pass_stats,
-            "fail_stats": fail_stats,
-            "best_capture": best_capture,
-            "target_match_candidates": target_candidates,
-            "observations": observations,
-            "observation_count": len(observations),
-        }
-        bank["entries"][key] = entry
-        session_entries[key] = {
-            **entry,
-            "observations": [obs_by_id[oid] for oid in session_obs_ids if oid in obs_by_id],
-            "session_observation_ids": session_obs_ids,
-        }
-
-        for obs in session_entries[key]["observations"]:
-            best = obs.get("best_capture") or {}
-            hints = obs.get("channel_direction_hints") or {}
-            detail_rows.append({
-                "rgb_key": key,
-                "observation_id": obs.get("observation_id"),
-                "input_r": input_rgb[0],
-                "input_g": input_rgb[1],
-                "input_b": input_rgb[2],
-                "status": obs.get("status"),
-                "dE": obs.get("dE"),
-                "lut_rgbw": ",".join(str(v) for v in (obs.get("lut_rgbw") or [])),
-                "measured_xyY": ",".join(str(v) for v in (obs.get("measured_xyY") or [])),
-                "xy_dx": obs.get("xy_dx"),
-                "xy_dy": obs.get("xy_dy"),
-                "pass_count": pass_stats.get("pass_count"),
-                "fail_count": fail_stats.get("fail_count"),
-                "best_pass_dE": pass_stats.get("best_dE"),
-                "best_capture_available": bool(best),
-                "best_capture_xy_dist": best.get("xy_dist", ""),
-                "best_capture_Y_log_ratio": best.get("Y_log_ratio", ""),
-                "best_capture_rgbw": ",".join(str(best.get(k, "")) for k in ("cap_r16", "cap_g16", "cap_b16", "cap_w16")) if best else "",
-                "capture_delta_rgbw": json.dumps(_json_sanitize(obs.get("capture_delta_rgbw")), sort_keys=True),
-                "channel_direction_hints": "|".join(f"{ch}:{mv}" for ch, mv in hints.items()),
-                "failure_flags": "|".join(obs.get("failure_flags", [])),
-                "seen_count": obs.get("seen_count"),
-                "sessions": "|".join(str(s) for s in obs.get("sessions", [])),
-            })
-
-    # Split pass/fail views preserve observations; they are not collapsed views.
-    pass_entries: dict[str, dict] = {}
-    fail_entries: dict[str, dict] = {}
-    for key, entry in bank["entries"].items():
-        obs = entry.get("observations", []) if isinstance(entry, dict) else []
-        pass_obs = [o for o in obs if o.get("status") == "pass"]
-        fail_obs = [o for o in obs if o.get("status") == "fail"]
-        if pass_obs:
-            e = dict(entry)
-            e["observations"] = pass_obs
-            e["observation_count"] = len(pass_obs)
-            pass_entries[key] = e
-        if fail_obs:
-            e = dict(entry)
-            e["observations"] = fail_obs
-            e["observation_count"] = len(fail_obs)
-            fail_entries[key] = e
-
-    bank_path.write_text(json.dumps(_json_sanitize(bank), indent=2), encoding="utf-8")
-    pass_path.write_text(json.dumps(_json_sanitize({
-        "schema_version": 2,
-        "display_id": display_id,
-        "entries": pass_entries,
-    }), indent=2), encoding="utf-8")
-    fail_path.write_text(json.dumps(_json_sanitize({
-        "schema_version": 2,
-        "display_id": display_id,
-        "entries": fail_entries,
-    }), indent=2), encoding="utf-8")
-
-    session_path = sessions_dir / f"{session_id}_feedback_bank.json"
-    session_csv = sessions_dir / f"{session_id}_feedback_detail.csv"
-    session_path.write_text(json.dumps(_json_sanitize({
-        "session": session_summary,
-        "schema_version": 2,
-        "entries": session_entries,
-    }), indent=2), encoding="utf-8")
-    if detail_rows:
-        with session_csv.open("w", newline="", encoding="utf-8") as fh:
-            writer = csv.DictWriter(fh, fieldnames=list(detail_rows[0].keys()))
-            writer.writeheader()
-            writer.writerows(detail_rows)
-
-    return {
-        "bank_path": bank_path,
-        "pass_path": pass_path,
-        "fail_path": fail_path,
-        "session_path": session_path,
-        "session_csv": session_csv,
-        "summary": session_summary,
-    }
+    return correction_pass_fail_dictionary.write_verifier_feedback_bank(
+        verifier_dir,
+        output_dir,
+        args,
+        display_profile,
+        default_config_dir=DEFAULT_CONFIG_DIR,
+        dE_threshold=dE_threshold,
+        parse_verifier_feedback_rows=_parse_verifier_feedback_rows,
+        resolve_target_match_candidates=lambda matches, search_dirs: _resolve_target_match_candidates(matches, search_dirs, max_candidates=12),
+        feedback_result_id=_feedback_result_id,
+        channel_direction_hints_for_observation=_channel_direction_hints_for_observation,
+        feedback_target_xyz=_feedback_target_xyz,
+        feedback_measured_xyz=_feedback_measured_xyz,
+        feedback_capture_delta=_feedback_capture_delta,
+        merge_feedback_observation=_merge_feedback_observation,
+        observation_sort_key=_observation_sort_key,
+        build_feedback_entry_stats=_build_feedback_entry_stats,
+        legacy_feedback_observations=_legacy_feedback_observations,
+    )
 
 def write_verifier_failure_dictionary(
     verifier_dir: Path,
@@ -7152,36 +6320,11 @@ def write_utilization_csv(
     used_anchor_set: set[int],
     output_path: Path,
 ) -> None:
-    """Write per-capture utilization report.
-
-    Each row is one unique drive state.  The 'used' column indicates whether
-    this capture was selected as a tetrahedron vertex (or KD-tree neighbour)
-    for at least one LUT node during the full build.
-    """
-    with output_path.open("w", newline="", encoding="utf-8") as fh:
-        fieldnames = [
-            "capture_index", "used",
-            "r16", "g16", "b16", "w16",
-            "X", "Y", "Z",
-            "n_averaged", "example_name",
-        ]
-        writer = csv.DictWriter(fh, fieldnames=fieldnames)
-        writer.writeheader()
-        for idx, m in enumerate(meta):
-            writer.writerow({
-                "capture_index": idx,
-                "used": idx in used_anchor_set,
-                **m,
-            })
+    build_lut_writer.write_utilization_csv(meta, used_anchor_set, output_path)
 
 
 def format_header_u16_entries(values: np.ndarray, values_per_line: int = 12) -> str:
-    chunks: list[str] = []
-    for start in range(0, values.size, values_per_line):
-        end = min(start + values_per_line, values.size)
-        line = ", ".join(str(int(v)) for v in values[start:end])
-        chunks.append(f"    {line}")
-    return ",\n".join(chunks)
+    return build_lut_writer.format_header_u16_entries(values, values_per_line)
 
 
 def write_rgbw_header(
@@ -7191,65 +6334,11 @@ def write_rgbw_header(
     args: argparse.Namespace,
     source_grid_size: int,
 ) -> None:
-    quantized = np.clip(np.round(cube), 0, 65535).astype(np.uint16)
-    flat = quantized.reshape(-1, 4)
-    entry_count = int(flat.shape[0])
-    guard = f"HYPERHDR_{output_path.stem.upper()}_H".replace("-", "_")
-
-    lines = [
-        "// Auto-generated by build_delaunay_rgbw_lut.py",
-        "// Mode 2: Delaunay-tetrahedralized RGBW LUT from physical captures.",
-        f"// LUT name: {lut_name}",
-        f"// Source solved grid size: {source_grid_size}",
-        "",
-        f"#ifndef {guard}",
-        f"#define {guard}",
-        "",
-        "#include <stdint.h>",
-        "",
-        "#ifdef __AVR__",
-        "  #include <avr/pgmspace.h>",
-        "#elif defined(ESP32) || defined(ESP8266)",
-        "  #include <pgmspace.h>",
-        "#elif !defined(PROGMEM)",
-        "  #define PROGMEM",
-        "#endif",
-        "",
-        f"static const uint32_t RGBW_LUT_FORMAT_VERSION = 1;",
-        f"static const uint32_t RGBW_LUT_SOURCE_GRID_SIZE = {source_grid_size};",
-        f"static const uint32_t RGBW_LUT_GRID_SIZE = {quantized.shape[0]};",
-        f"static const uint32_t RGBW_LUT_ENTRY_COUNT = {entry_count};",
-        f"static const uint8_t RGBW_LUT_IS_SAMPLED_3D_GRID = 1;",
-        f"static const uint32_t RGBW_LUT_AXIS_MIN = 0;",
-        f"static const uint32_t RGBW_LUT_AXIS_MAX = {int(round(args.sample_scale))};",
-        "",
-        f"static const uint16_t RGBW_LUT_R[{entry_count}] PROGMEM = {{",
-        format_header_u16_entries(flat[:, 0]),
-        "};",
-        "",
-        f"static const uint16_t RGBW_LUT_G[{entry_count}] PROGMEM = {{",
-        format_header_u16_entries(flat[:, 1]),
-        "};",
-        "",
-        f"static const uint16_t RGBW_LUT_B[{entry_count}] PROGMEM = {{",
-        format_header_u16_entries(flat[:, 2]),
-        "};",
-        "",
-        f"static const uint16_t RGBW_LUT_W[{entry_count}] PROGMEM = {{",
-        format_header_u16_entries(flat[:, 3]),
-        "};",
-        "",
-        f"#endif  // {guard}",
-        "",
-    ]
-    output_path.write_text("\n".join(lines), encoding="utf-8")
+    build_lut_writer.write_rgbw_header(cube, output_path, lut_name, args, source_grid_size)
 
 
 def save_lut_npy(cube: np.ndarray, output_path: Path) -> None:
-    quantized = np.clip(np.round(cube), 0, 65535).astype(np.uint16)
-    memmap = open_memmap(output_path, mode="w+", dtype=np.uint16, shape=quantized.shape)
-    memmap[:] = quantized
-    del memmap
+    build_lut_writer.save_lut_npy(cube, output_path)
 
 
 def summarize_build(
@@ -7264,50 +6353,18 @@ def summarize_build(
     equal_rgb_xy: tuple[float, float],
     y_scale: float = 1.0,
 ) -> dict:
-    n_unique = len(xyz_points)
-
-    gains = np.array([r["white_gain_abs"] for r in coarse_rows], dtype=float)
-
-    return {
-        "mode": "delaunay",
-        "solver": "family_hull",
-        "settings": {
-            "input_dir": str(args.input_dir),
-            "target_white_balance_mode": args.target_white_balance_mode,
-            "sample_scale": args.sample_scale,
-            "coarse_grid_size": args.coarse_grid_size,
-            "full_grid_size": args.full_grid_size,
-            "white_x": args.white_x,
-            "white_y": args.white_y,
-            "white_Y": args.white_Y,
-            "y_scale": y_scale,
-            "delta_e_tiebreak": getattr(args, "delta_e_tiebreak", 2.0),
-            "chroma_gate": getattr(args, "chroma_gate", 15.0),
-        },
-        "build_mode": "delaunay",
-        "basis_xyz_per_q16": {
-            "r16": target_rgb_basis[:, 0].tolist(),
-            "g16": target_rgb_basis[:, 1].tolist(),
-            "b16": target_rgb_basis[:, 2].tolist(),
-        },
-        "capture_stats": {
-            "raw_rows": raw_count,
-            "unique_drive_states": n_unique,
-            "duplicates_averaged": raw_count - n_unique,
-        },
-        "basis_sanity": {
-            "equal_rgb_neutral_xy": list(equal_rgb_xy),
-            "white_channel_xy": list(white_channel_xy),
-            "reference_white_xy": [args.white_x, args.white_y],
-        },
-        "coarse_diagnostics": {
-            "white_gain_p01": float(np.quantile(gains, 0.01)) if len(gains) > 0 else float("nan"),
-            "white_gain_p10": float(np.quantile(gains, 0.10)) if len(gains) > 0 else float("nan"),
-            "white_gain_p50": float(np.quantile(gains, 0.50)) if len(gains) > 0 else float("nan"),
-            "white_gain_p90": float(np.quantile(gains, 0.90)) if len(gains) > 0 else float("nan"),
-            "white_gain_p99": float(np.quantile(gains, 0.99)) if len(gains) > 0 else float("nan"),
-        },
-    }
+    return build_diagnostics.summarize_delaunay_build(
+        coarse_rows,
+        xyz_points,
+        rgbw_points,
+        used_anchor_set,
+        raw_count,
+        args,
+        target_rgb_basis,
+        white_channel_xy,
+        equal_rgb_xy,
+        y_scale=y_scale,
+    )
 
 
 # ---------------------------------------------------------------------------

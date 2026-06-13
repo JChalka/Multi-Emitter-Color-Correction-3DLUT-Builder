@@ -1,0 +1,3452 @@
+{
+  "generated_by": "python tools/generate_function_tree.py",
+  "module_tree": {
+    "FILES_FOR_TRANSITION": [
+      {
+        "module_path": "FILES_FOR_TRANSITION/analyze_rgbw_captures.py",
+        "function_count": 18,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "FILES_FOR_TRANSITION/build_delaunay_rgbw_lut.py",
+        "function_count": 97,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "FILES_FOR_TRANSITION/build_measured_rgbw_lut.py",
+        "function_count": 19,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+        "function_count": 21,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "FILES_FOR_TRANSITION/prototype_measured_white_solver.py",
+        "function_count": 27,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "FILES_FOR_TRANSITION/rgbw_lut_gui.py",
+        "function_count": 9,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "FILES_FOR_TRANSITION/wx_virtual_primary_gui.py",
+        "function_count": 12,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "FILES_FOR_TRANSITION/xy_target_rgbw_model.py",
+        "function_count": 102,
+        "is_placeholder": false
+      }
+    ],
+    "rgbw_lut_builder": [
+      {
+        "module_path": "rgbw_lut_builder/__init__.py",
+        "function_count": 0,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "rgbw_lut_builder/captures/loaders.py",
+        "function_count": 2,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "rgbw_lut_builder/captures/schemas.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/captures/spotread_protocol.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/captures/udp_client.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/captures/validators.py",
+        "function_count": 3,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "rgbw_lut_builder/correction/correction_field.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/correction/live_retry.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/correction/measured_simplex.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/correction/multi_emitter_correction.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/correction/pass_fail_dictionary.py",
+        "function_count": 9,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "rgbw_lut_builder/correction/residuals.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/correction/triangle_ranker.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/gui/__init__.py",
+        "function_count": 0,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "rgbw_lut_builder/gui/analyze_rgbw_captures.py",
+        "function_count": 18,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+        "function_count": 91,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "rgbw_lut_builder/gui/build_measured_rgbw_lut.py",
+        "function_count": 19,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "rgbw_lut_builder/gui/prototype_measured_white_solver.py",
+        "function_count": 27,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "rgbw_lut_builder/gui/rgbw_lut_gui.py",
+        "function_count": 9,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "rgbw_lut_builder/legacy/__init__.py",
+        "function_count": 0,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+        "function_count": 102,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "rgbw_lut_builder/model/__init__.py",
+        "function_count": 0,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "rgbw_lut_builder/model/emitter_classification.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/model/gamuts.py",
+        "function_count": 11,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "rgbw_lut_builder/model/interpolation/__init__.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/model/interpolation/fixed_point.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/model/interpolation/tetra_coefficients.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/model/interpolation/tetrahedral.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/model/layered_simplex.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/model/projection.py",
+        "function_count": 1,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "rgbw_lut_builder/model/rgb_model.py",
+        "function_count": 2,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "rgbw_lut_builder/model/rgbw_model.py",
+        "function_count": 4,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "rgbw_lut_builder/model/simplex.py",
+        "function_count": 6,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "rgbw_lut_builder/model/topology.py",
+        "function_count": 4,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "rgbw_lut_builder/model/wx_modes.py",
+        "function_count": 3,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "rgbw_lut_builder/output/1d_greyscale_export.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/output/apa102_encoder.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/output/binary_cube_export.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/output/c_header_export.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/output/channels16.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/output/coefficient_cube_export.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/output/hd108_encoder.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/output/hyperhdr_export.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/output/mcu_header_export.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/output/rgb16.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/output/rgb8.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/output/rgbw16.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/output/rgbw8.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/output/temporal_bfi_encoder.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/paths.py",
+        "function_count": 0,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "rgbw_lut_builder/response/base.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/response/fill16_ramps.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/response/hardcoded_ramps.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/response/hybrid.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/response/multi_emitter_profile.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/response/temporal_bfi.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/verify/metrics.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/verify/reports.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "rgbw_lut_builder/verify/verifier.py",
+        "function_count": 0,
+        "is_placeholder": true
+      }
+    ],
+    "tools": [
+      {
+        "module_path": "tools/build_lut.py",
+        "function_count": 2,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "tools/convert_temporal_bfi_dataset.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "tools/generate_capture_plan.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "tools/generate_function_tree.py",
+        "function_count": 10,
+        "is_placeholder": false
+      },
+      {
+        "module_path": "tools/install_dependencies.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "tools/run_live_capture.py",
+        "function_count": 0,
+        "is_placeholder": true
+      },
+      {
+        "module_path": "tools/verify_lut.py",
+        "function_count": 0,
+        "is_placeholder": true
+      }
+    ]
+  },
+  "move_plan": [
+    {
+      "phase": "Phase 1",
+      "item": "move rgbw_lut_gui into standalone repo",
+      "status": "done",
+      "targets": [
+        "rgbw_lut_builder/gui/rgbw_lut_gui.py",
+        "tools/build_lut.py"
+      ],
+      "sources": [
+        "FILES_FOR_TRANSITION/rgbw_lut_gui.py"
+      ],
+      "patterns": [
+        "main"
+      ],
+      "math_refs": [],
+      "candidate_functions": [
+        {
+          "module_path": "FILES_FOR_TRANSITION/rgbw_lut_gui.py",
+          "name": "main",
+          "lineno": 1906,
+          "end_lineno": 1908,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "phase": "Phase 1",
+      "item": "move reusable Delaunay/worker/memory/export utilities",
+      "status": "done",
+      "targets": [
+        "rgbw_lut_builder/build/diagnostics.py",
+        "rgbw_lut_builder/build/live_measured.py",
+        "rgbw_lut_builder/build/lut_writer.py",
+        "rgbw_lut_builder/captures/loaders.py",
+        "rgbw_lut_builder/correction/pass_fail_dictionary.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py"
+      ],
+      "patterns": [
+        "_worker_init",
+        "load_or_create_display_profile",
+        "write_verifier_.*",
+        "write_.*csv",
+        "available_memory_bytes"
+      ],
+      "math_refs": [],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_available_memory_bytes",
+          "lineno": 1395,
+          "end_lineno": 1396,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_worker_init",
+          "lineno": 3921,
+          "end_lineno": 4087,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "write_probe_debug_csv",
+          "lineno": 4796,
+          "end_lineno": 5021,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "write_comparison_csv",
+          "lineno": 5400,
+          "end_lineno": 5401,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "load_or_create_display_profile",
+          "lineno": 5443,
+          "end_lineno": 5451,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "write_verifier_feedback_bank",
+          "lineno": 5988,
+          "end_lineno": 6014,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "write_verifier_failure_dictionary",
+          "lineno": 6016,
+          "end_lineno": 6314,
+          "description": "Legacy verifier failure aggregation/report writer."
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "write_utilization_csv",
+          "lineno": 6318,
+          "end_lineno": 6323,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "phase": "Phase 2",
+      "item": "add explicit RGB-only model path",
+      "status": "done",
+      "targets": [
+        "rgbw_lut_builder/model/rgb_model.py",
+        "rgbw_lut_builder/build/model_only.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/legacy/xy_target_rgbw_model.py"
+      ],
+      "patterns": [
+        "input_linear_to_XYZ",
+        "_strict_project_target_xyz_to_led_hull",
+        "_solve_xyz"
+      ],
+      "math_refs": [
+        {
+          "label": "RGB-only model",
+          "href": "../README_MATH_MODEL.md#5-rgb-only-model"
+        },
+        {
+          "label": "Out-of-hull projection",
+          "href": "../README_MATH_MODEL.md#3-out-of-hull-projection"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "input_linear_to_XYZ",
+          "lineno": 348,
+          "end_lineno": 357,
+          "description": "Source-gamut RGB to LED-space XYZ transform."
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_solve_xyz",
+          "lineno": 419,
+          "end_lineno": 437,
+          "description": "Shared 3-emitter XYZ linear solve primitive."
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_strict_project_target_xyz_to_led_hull",
+          "lineno": 2148,
+          "end_lineno": 2208,
+          "description": "Project out-of-hull targets back onto the reachable LED hull."
+        }
+      ]
+    },
+    {
+      "phase": "Phase 2",
+      "item": "keep RGBW strict sub-gamut model path",
+      "status": "done",
+      "targets": [
+        "rgbw_lut_builder/model/topology.py",
+        "rgbw_lut_builder/model/rgbw_model.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/legacy/xy_target_rgbw_model.py"
+      ],
+      "patterns": [
+        "_find_sub_gamut",
+        "_solve_xyz",
+        "_solve_subgamut_fraction_from_linear",
+        "rgb_to_rgbw_subgamut"
+      ],
+      "math_refs": [
+        {
+          "label": "Strict RGBW sub-gamut model",
+          "href": "../README_MATH_MODEL.md#6-strict-rgbw-sub-gamut-model"
+        },
+        {
+          "label": "Common simplex solve",
+          "href": "../README_MATH_MODEL.md#2-common-simplex-solve"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_find_sub_gamut",
+          "lineno": 407,
+          "end_lineno": 415,
+          "description": "Find the containing strict RGBW sub-gamut in xy space."
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_solve_xyz",
+          "lineno": 419,
+          "end_lineno": 437,
+          "description": "Shared 3-emitter XYZ linear solve primitive."
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "rgb_to_rgbw_subgamut",
+          "lineno": 495,
+          "end_lineno": 559,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_solve_subgamut_fraction_from_linear",
+          "lineno": 2820,
+          "end_lineno": 2859,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "phase": "Phase 2",
+      "item": "add explicit WX radial virtual-primary model path",
+      "status": "done",
+      "targets": [
+        "rgbw_lut_builder/model/wx_modes.py",
+        "rgbw_lut_builder/model/rgbw_model.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/legacy/xy_target_rgbw_model.py"
+      ],
+      "patterns": [
+        "_solve_wx_radial_.*",
+        "_wx_radial_.*",
+        "_solve_wx_fraction_from_linear"
+      ],
+      "math_refs": [
+        {
+          "label": "WX family",
+          "href": "../README_MATH_MODEL.md#7-wx--white-overdrive-model-family"
+        },
+        {
+          "label": "WX common structure",
+          "href": "../README_MATH_MODEL.md#8-wx-common-virtual-primary-structure"
+        },
+        {
+          "label": "Preferred wx_radial_virtual",
+          "href": "../README_MATH_MODEL.md#9-preferred-wx-mode-wx_radial_virtual"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_wx_radial_ccw_span",
+          "lineno": 2241,
+          "end_lineno": 2242,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_wx_radial_angle_from_w_to_xy",
+          "lineno": 2245,
+          "end_lineno": 2251,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_wx_radial_sector_for_subgamut",
+          "lineno": 2254,
+          "end_lineno": 2259,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_wx_radial_hull_point_for_sector_position",
+          "lineno": 2262,
+          "end_lineno": 2299,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_wx_radial_solve_virtual_primary_at_xy",
+          "lineno": 2302,
+          "end_lineno": 2324,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_wx_radial_virtual_primary_state",
+          "lineno": 2327,
+          "end_lineno": 2409,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_select_wx_radial_virtual_primary_set",
+          "lineno": 2412,
+          "end_lineno": 2425,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_solve_wx_radial_virtual_fraction_for_xy",
+          "lineno": 2428,
+          "end_lineno": 2447,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_solve_wx_radial_virtual_fraction_from_xyz",
+          "lineno": 2450,
+          "end_lineno": 2464,
+          "description": "Radial virtual-primary WX solve from target XYZ."
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_solve_wx_fraction_from_linear",
+          "lineno": 2862,
+          "end_lineno": 2888,
+          "description": "Dispatch WX solve from linear RGB into a constrained RGBW tuple."
+        }
+      ]
+    },
+    {
+      "phase": "Phase 2",
+      "item": "keep LP max-white as wx_lp_legacy reference path",
+      "status": "done",
+      "targets": [
+        "rgbw_lut_builder/model/wx_modes.py",
+        "rgbw_lut_builder/model/rgbw_model.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/legacy/xy_target_rgbw_model.py"
+      ],
+      "patterns": [
+        "_solve_wx_lp_legacy_fraction_from_xyz",
+        "rgb_to_rgbw_wx_legacy"
+      ],
+      "math_refs": [
+        {
+          "label": "Reference wx_lp_legacy",
+          "href": "../README_MATH_MODEL.md#10-reference-wx-mode-wx_lp_legacy"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "rgb_to_rgbw_wx_legacy",
+          "lineno": 564,
+          "end_lineno": 627,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_solve_wx_lp_legacy_fraction_from_xyz",
+          "lineno": 2696,
+          "end_lineno": 2698,
+          "description": "Reference LP/max-white WX solve from target XYZ."
+        }
+      ]
+    },
+    {
+      "phase": "Phase 2",
+      "item": "add wx_virtual_axis_maxbright as a first-class high-brightness WX path",
+      "status": "done",
+      "targets": [
+        "rgbw_lut_builder/model/wx_modes.py",
+        "rgbw_lut_builder/model/rgbw_model.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/legacy/xy_target_rgbw_model.py"
+      ],
+      "patterns": [
+        "_solve_wx_virtual_axis_maxbright_.*",
+        "_select_wx_virtual_axis_.*",
+        "_wx_axis_candidates_for_subgamut"
+      ],
+      "math_refs": [
+        {
+          "label": "Max-brightness wx_virtual_axis_maxbright",
+          "href": "../README_MATH_MODEL.md#11-max-brightness-wx-mode-wx_virtual_axis_maxbright"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_wx_axis_candidates_for_subgamut",
+          "lineno": 2469,
+          "end_lineno": 2531,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_select_wx_virtual_axis_primary_set",
+          "lineno": 2543,
+          "end_lineno": 2611,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_select_wx_virtual_axis_primary_for_subgamut",
+          "lineno": 2614,
+          "end_lineno": 2627,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_solve_wx_virtual_axis_maxbright_fraction_for_xy",
+          "lineno": 2660,
+          "end_lineno": 2680,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_solve_wx_virtual_axis_maxbright_fraction_from_xyz",
+          "lineno": 2683,
+          "end_lineno": 2693,
+          "description": "Virtual-axis max-brightness WX solve from target XYZ."
+        }
+      ]
+    },
+    {
+      "phase": "Phase 2",
+      "item": "share gamut transforms and hull projection",
+      "status": "done",
+      "targets": [
+        "rgbw_lut_builder/model/gamuts.py",
+        "rgbw_lut_builder/model/projection.py",
+        "rgbw_lut_builder/model/simplex.py",
+        "rgbw_lut_builder/model/topology.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/legacy/xy_target_rgbw_model.py"
+      ],
+      "patterns": [
+        "_build_gamut_matrix",
+        "input_linear_to_XYZ",
+        "XYZ_to_xy",
+        "_strict_project_target_xyz_to_led_hull",
+        "_barycentric_2d",
+        "_xy_in_triangle"
+      ],
+      "math_refs": [
+        {
+          "label": "Source gamut conversion",
+          "href": "../README_MATH_MODEL.md#source-gamut-conversion"
+        },
+        {
+          "label": "Common simplex solve",
+          "href": "../README_MATH_MODEL.md#2-common-simplex-solve"
+        },
+        {
+          "label": "Out-of-hull projection",
+          "href": "../README_MATH_MODEL.md#3-out-of-hull-projection"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "XYZ_to_xy",
+          "lineno": 114,
+          "end_lineno": 119,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_build_gamut_matrix",
+          "lineno": 134,
+          "end_lineno": 148,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "input_linear_to_XYZ",
+          "lineno": 348,
+          "end_lineno": 357,
+          "description": "Source-gamut RGB to LED-space XYZ transform."
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_barycentric_2d",
+          "lineno": 380,
+          "end_lineno": 395,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_xy_in_triangle",
+          "lineno": 398,
+          "end_lineno": 404,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_strict_project_target_xyz_to_led_hull",
+          "lineno": 2148,
+          "end_lineno": 2208,
+          "description": "Project out-of-hull targets back onto the reachable LED hull."
+        }
+      ]
+    },
+    {
+      "phase": "Phase 2",
+      "item": "share tetrahedral LUT sampling assumptions",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/model/interpolation/",
+        "rgbw_lut_builder/output/coefficient_cube_export.py",
+        "rgbw_lut_builder/runtime/"
+      ],
+      "sources": [
+        "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+        "rgbw_lut_builder/runtime/"
+      ],
+      "patterns": [
+        "write_lut_header",
+        "build_rgbw_lut_cube"
+      ],
+      "math_refs": [
+        {
+          "label": "Tetrahedral LUT interpolation",
+          "href": "../README_MATH_MODEL.md#14-tetrahedral-lut-interpolation"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "write_lut_header",
+          "lineno": 3467,
+          "end_lineno": 3497,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "build_rgbw_lut_cube",
+          "lineno": 3701,
+          "end_lineno": 3971,
+          "description": "Legacy full cube builder for model-only RGBW LUTs."
+        }
+      ]
+    },
+    {
+      "phase": "Phase 2",
+      "item": "add output-family metadata everywhere",
+      "status": "active",
+      "targets": [
+        "rgbw_lut_builder/build/model_only.py",
+        "rgbw_lut_builder/output/",
+        "rgbw_lut_builder/verify/reports.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/build/model_only.py",
+        "rgbw_lut_builder/gui/build_measured_rgbw_lut.py",
+        "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py"
+      ],
+      "patterns": [
+        "build_model_lut_cube",
+        "write_.*header",
+        "save_lut_npy",
+        "summary"
+      ],
+      "math_refs": [],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "write_rgbw_header",
+          "lineno": 6330,
+          "end_lineno": 6337,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "save_lut_npy",
+          "lineno": 6340,
+          "end_lineno": 6341,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_measured_rgbw_lut.py",
+          "name": "write_rgbw_header",
+          "lineno": 311,
+          "end_lineno": 318,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "phase": "Phase 3",
+      "item": "implement ChannelResponseProvider API",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/response/base.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/legacy/xy_target_rgbw_model.py"
+      ],
+      "patterns": [
+        "_channel_.*",
+        "_drive_from_channel_.*",
+        "_decode_source_rgb16_to_linear",
+        "_encode_linear_to_model_code"
+      ],
+      "math_refs": [
+        {
+          "label": "Correction response profiles and observed response curves",
+          "href": "../README_MATH_MODEL.md#correction-response-profiles-and-observed-response-curves"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_channel_y_fraction_from_drive",
+          "lineno": 1367,
+          "end_lineno": 1380,
+          "description": "Single-channel Y ramp lookup from drive level."
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_drive_from_channel_y_fraction",
+          "lineno": 1383,
+          "end_lineno": 1392,
+          "description": "Inverse single-channel Y ramp lookup."
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_decode_source_rgb16_to_linear",
+          "lineno": 1395,
+          "end_lineno": 1403,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_encode_linear_to_model_code",
+          "lineno": 1406,
+          "end_lineno": 1414,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_channel_xy_from_drive",
+          "lineno": 1479,
+          "end_lineno": 1488,
+          "description": "Single-channel xy lookup from drive level."
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_channel_basis_xyz_for_fraction",
+          "lineno": 1491,
+          "end_lineno": 1508,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_channel_xyz_curve",
+          "lineno": 1548,
+          "end_lineno": 1573,
+          "description": "Per-channel XYZ curve synthesized from measured ramps."
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_channel_y_abs_from_drive",
+          "lineno": 1576,
+          "end_lineno": 1587,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_drive_from_channel_y_abs",
+          "lineno": 1590,
+          "end_lineno": 1598,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_channel_xyz_from_drive",
+          "lineno": 1632,
+          "end_lineno": 1654,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_refine_rgbw_fraction_with_channel_xy",
+          "lineno": 1754,
+          "end_lineno": 1791,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_channel_y_curve_strict",
+          "lineno": 3449,
+          "end_lineno": 3455,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "phase": "Phase 3",
+      "item": "load fill16 channel ramps",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/response/fill16_ramps.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+        "rgbw_lut_builder/captures/loaders.py"
+      ],
+      "patterns": [
+        "_channel_y_fraction_from_drive",
+        "_channel_xy_from_drive",
+        "load_captures"
+      ],
+      "math_refs": [],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/captures/loaders.py",
+          "name": "load_captures",
+          "lineno": 30,
+          "end_lineno": 80,
+          "description": "Load and normalize measured patch capture rows."
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_channel_y_fraction_from_drive",
+          "lineno": 1367,
+          "end_lineno": 1380,
+          "description": "Single-channel Y ramp lookup from drive level."
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_channel_xy_from_drive",
+          "lineno": 1479,
+          "end_lineno": 1488,
+          "description": "Single-channel xy lookup from drive level."
+        }
+      ]
+    },
+    {
+      "phase": "Phase 3",
+      "item": "load hardcoded fallback ramps",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/response/hardcoded_ramps.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/legacy/xy_target_rgbw_model.py"
+      ],
+      "patterns": [
+        "MAX_Y",
+        "PRIMARY_XYZ",
+        "_channel_y_curve_strict"
+      ],
+      "math_refs": [],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_max_y_virtual_primary_for_subgamut",
+          "lineno": 2019,
+          "end_lineno": 2126,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_channel_y_curve_strict",
+          "lineno": 3449,
+          "end_lineno": 3455,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "phase": "Phase 3",
+      "item": "add TemporalBFI dense response backend with chunked/indexed lookup",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/response/temporal_bfi.py"
+      ],
+      "sources": [
+        "tools/convert_temporal_bfi_dataset.py",
+        "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py"
+      ],
+      "patterns": [
+        ".*"
+      ],
+      "math_refs": [],
+      "candidate_functions": [
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_spotread_command_with_one_shot",
+          "lineno": 108,
+          "end_lineno": 119,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_generate_verifier_patches",
+          "lineno": 176,
+          "end_lineno": 236,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_lut_axis_position",
+          "lineno": 239,
+          "end_lineno": 250,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_clamp_lut_result",
+          "lineno": 253,
+          "end_lineno": 256,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_trilinear_lut_lookup",
+          "lineno": 259,
+          "end_lineno": 284,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_tetrahedral_lut_lookup",
+          "lineno": 287,
+          "end_lineno": 331,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_lut_lookup",
+          "lineno": 334,
+          "end_lineno": 342,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_xy_to_xyz1_tuple",
+          "lineno": 374,
+          "end_lineno": 376,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_build_rgb_to_xyz_matrix",
+          "lineno": 379,
+          "end_lineno": 387,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_apply_transfer_normalized",
+          "lineno": 396,
+          "end_lineno": 413,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_expected_xy_for_named_gamut",
+          "lineno": 416,
+          "end_lineno": 429,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_xyz_to_xy_tuple",
+          "lineno": 433,
+          "end_lineno": 439,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_point_in_triangle_xy",
+          "lineno": 442,
+          "end_lineno": 457,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_closest_point_on_segment_xy",
+          "lineno": 460,
+          "end_lineno": 471,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_project_xy_to_hull",
+          "lineno": 474,
+          "end_lineno": 505,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_xyY_to_XYZ",
+          "lineno": 509,
+          "end_lineno": 516,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_nnls_small",
+          "lineno": 519,
+          "end_lineno": 551,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_compute_model_scale_k",
+          "lineno": 554,
+          "end_lineno": 575,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_model_project_xy_for_named_gamut",
+          "lineno": 578,
+          "end_lineno": 638,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_xy_chroma_de",
+          "lineno": 642,
+          "end_lineno": 666,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "main",
+          "lineno": 2877,
+          "end_lineno": 2880,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "phase": "Phase 3",
+      "item": "add HybridResponseProvider source precedence",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/response/hybrid.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/response/base.py",
+        "rgbw_lut_builder/response/fill16_ramps.py",
+        "rgbw_lut_builder/response/hardcoded_ramps.py",
+        "rgbw_lut_builder/response/temporal_bfi.py"
+      ],
+      "patterns": [],
+      "math_refs": [],
+      "candidate_functions": []
+    },
+    {
+      "phase": "Phase 4",
+      "item": "load patch captures",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/verify/verifier.py",
+        "rgbw_lut_builder/captures/loaders.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/captures/loaders.py",
+        "rgbw_lut_builder/gui/analyze_rgbw_captures.py"
+      ],
+      "patterns": [
+        "load_captures",
+        "build_family_capture_sets"
+      ],
+      "math_refs": [
+        {
+          "label": "Capture-cloud simplex correction",
+          "href": "../README_MATH_MODEL.md#12-capture-cloud-simplex-correction"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/captures/loaders.py",
+          "name": "load_captures",
+          "lineno": 30,
+          "end_lineno": 80,
+          "description": "Load and normalize measured patch capture rows."
+        },
+        {
+          "module_path": "rgbw_lut_builder/captures/loaders.py",
+          "name": "build_family_capture_sets",
+          "lineno": 83,
+          "end_lineno": 104,
+          "description": "Group captures into family-specific lookup sets."
+        }
+      ]
+    },
+    {
+      "phase": "Phase 4",
+      "item": "compute model prediction for each capture",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/verify/verifier.py",
+        "rgbw_lut_builder/build/model_only.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+        "rgbw_lut_builder/build/model_only.py"
+      ],
+      "patterns": [
+        "verify_captures",
+        "_predict_xyz_from_rgbw16",
+        "solve_model_node"
+      ],
+      "math_refs": [
+        {
+          "label": "RGB-only model",
+          "href": "../README_MATH_MODEL.md#5-rgb-only-model"
+        },
+        {
+          "label": "Strict RGBW sub-gamut model",
+          "href": "../README_MATH_MODEL.md#6-strict-rgbw-sub-gamut-model"
+        },
+        {
+          "label": "WX family",
+          "href": "../README_MATH_MODEL.md#7-wx--white-overdrive-model-family"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_predict_xyz_from_rgbw16",
+          "lineno": 866,
+          "end_lineno": 871,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "verify_captures",
+          "lineno": 906,
+          "end_lineno": 1062,
+          "description": "Legacy model-vs-capture verification/report path."
+        }
+      ]
+    },
+    {
+      "phase": "Phase 4",
+      "item": "compare strict_subgamut, wx_radial_virtual, wx_virtual_axis_maxbright, and wx_lp_legacy residuals",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/verify/metrics.py",
+        "rgbw_lut_builder/verify/reports.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/legacy/xy_target_rgbw_model.py"
+      ],
+      "patterns": [
+        "verify_captures",
+        "rgb_to_rgbw_wx.*",
+        "rgb_to_rgbw_subgamut"
+      ],
+      "math_refs": [
+        {
+          "label": "Strict RGBW sub-gamut model",
+          "href": "../README_MATH_MODEL.md#6-strict-rgbw-sub-gamut-model"
+        },
+        {
+          "label": "Preferred wx_radial_virtual",
+          "href": "../README_MATH_MODEL.md#9-preferred-wx-mode-wx_radial_virtual"
+        },
+        {
+          "label": "Reference wx_lp_legacy",
+          "href": "../README_MATH_MODEL.md#10-reference-wx-mode-wx_lp_legacy"
+        },
+        {
+          "label": "Max-brightness wx_virtual_axis_maxbright",
+          "href": "../README_MATH_MODEL.md#11-max-brightness-wx-mode-wx_virtual_axis_maxbright"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "rgb_to_rgbw_subgamut",
+          "lineno": 495,
+          "end_lineno": 559,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "rgb_to_rgbw_wx_legacy",
+          "lineno": 564,
+          "end_lineno": 627,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "rgb_to_rgbw_wx",
+          "lineno": 630,
+          "end_lineno": 690,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "verify_captures",
+          "lineno": 906,
+          "end_lineno": 1062,
+          "description": "Legacy model-vs-capture verification/report path."
+        }
+      ]
+    },
+    {
+      "phase": "Phase 4",
+      "item": "write model_vs_capture_report.csv",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/verify/reports.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+        "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py"
+      ],
+      "patterns": [
+        "verify_captures",
+        "write_verifier_failure_dictionary",
+        "write_.*csv"
+      ],
+      "math_refs": [],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "write_probe_debug_csv",
+          "lineno": 4796,
+          "end_lineno": 5021,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "write_comparison_csv",
+          "lineno": 5400,
+          "end_lineno": 5401,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "write_verifier_failure_dictionary",
+          "lineno": 6016,
+          "end_lineno": 6314,
+          "description": "Legacy verifier failure aggregation/report writer."
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "write_utilization_csv",
+          "lineno": 6318,
+          "end_lineno": 6323,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "write_csv",
+          "lineno": 825,
+          "end_lineno": 862,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "verify_captures",
+          "lineno": 906,
+          "end_lineno": 1062,
+          "description": "Legacy model-vs-capture verification/report path."
+        }
+      ]
+    },
+    {
+      "phase": "Phase 4",
+      "item": "separate results by gamut, transfer, output family, topology, and Y bucket",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/verify/metrics.py",
+        "rgbw_lut_builder/verify/reports.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/build/model_only.py",
+        "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py"
+      ],
+      "patterns": [
+        "summary",
+        "write_verifier_failure_dictionary"
+      ],
+      "math_refs": [],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "write_verifier_failure_dictionary",
+          "lineno": 6016,
+          "end_lineno": 6314,
+          "description": "Legacy verifier failure aggregation/report writer."
+        }
+      ]
+    },
+    {
+      "phase": "Phase 4",
+      "item": "reuse existing verifier/pass-fail dictionary structure",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/verify/reports.py",
+        "rgbw_lut_builder/correction/pass_fail_dictionary.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/correction/pass_fail_dictionary.py",
+        "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py"
+      ],
+      "patterns": [
+        "write_verifier_feedback_bank",
+        "load_feedback_candidate_model_for_args",
+        "_parse_verifier_feedback_rows"
+      ],
+      "math_refs": [
+        {
+          "label": "Capture-cloud simplex correction",
+          "href": "../README_MATH_MODEL.md#12-capture-cloud-simplex-correction"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/correction/pass_fail_dictionary.py",
+          "name": "load_feedback_candidate_model_for_args",
+          "lineno": 134,
+          "end_lineno": 183,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/correction/pass_fail_dictionary.py",
+          "name": "write_verifier_feedback_bank",
+          "lineno": 186,
+          "end_lineno": 458,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "load_feedback_candidate_model_for_args",
+          "lineno": 4536,
+          "end_lineno": 4543,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_parse_verifier_feedback_rows",
+          "lineno": 5571,
+          "end_lineno": 5684,
+          "description": "Collect verifier CSV rows and target-match candidates."
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "write_verifier_feedback_bank",
+          "lineno": 5988,
+          "end_lineno": 6014,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "phase": "Phase 5",
+      "item": "implement slightly-expanded virtual reference hull generation",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/model/projection.py",
+        "rgbw_lut_builder/model/emitter_classification.py"
+      ],
+      "sources": [],
+      "patterns": [],
+      "math_refs": [
+        {
+          "label": "Profile-space virtual reference hull",
+          "href": "../README_MATH_MODEL.md#4-profile-space-virtual-reference-hull"
+        }
+      ],
+      "candidate_functions": []
+    },
+    {
+      "phase": "Phase 5",
+      "item": "project/remap measured emitters into stored virtual emitter profiles",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/model/projection.py",
+        "rgbw_lut_builder/response/multi_emitter_profile.py"
+      ],
+      "sources": [],
+      "patterns": [],
+      "math_refs": [
+        {
+          "label": "Physical and virtual emitter records",
+          "href": "../README_MATH_MODEL.md#physical-and-virtual-emitter-records"
+        },
+        {
+          "label": "Solve using virtual geometry, expand through physical channels",
+          "href": "../README_MATH_MODEL.md#solve-using-virtual-geometry-expand-through-physical-channels"
+        }
+      ],
+      "candidate_functions": []
+    },
+    {
+      "phase": "Phase 5",
+      "item": "separate solver geometry coordinates from physical output channel tuples",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/model/simplex.py",
+        "rgbw_lut_builder/response/multi_emitter_profile.py"
+      ],
+      "sources": [],
+      "patterns": [],
+      "math_refs": [
+        {
+          "label": "Solve using virtual geometry, expand through physical channels",
+          "href": "../README_MATH_MODEL.md#solve-using-virtual-geometry-expand-through-physical-channels"
+        }
+      ],
+      "candidate_functions": []
+    },
+    {
+      "phase": "Phase 5",
+      "item": "add active-channel-family grouping to verifier reports",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/verify/reports.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py"
+      ],
+      "patterns": [
+        "write_verifier_failure_dictionary",
+        "_feedback_.*"
+      ],
+      "math_refs": [
+        {
+          "label": "Correction response profiles and observed response curves",
+          "href": "../README_MATH_MODEL.md#correction-response-profiles-and-observed-response-curves"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_feedback_rgb_key_from_rgb",
+          "lineno": 4342,
+          "end_lineno": 4344,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_feedback_rgbw_family_index",
+          "lineno": 4347,
+          "end_lineno": 4359,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_feedback_observation_sort_value",
+          "lineno": 4362,
+          "end_lineno": 4375,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_feedback_ok_value",
+          "lineno": 4378,
+          "end_lineno": 4384,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_feedback_obs_from_verifier_row",
+          "lineno": 4387,
+          "end_lineno": 4422,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_iter_feedback_bank_observations",
+          "lineno": 4425,
+          "end_lineno": 4467,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "build_feedback_candidate_model_from_observations",
+          "lineno": 4470,
+          "end_lineno": 4533,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "load_feedback_candidate_model_for_args",
+          "lineno": 4536,
+          "end_lineno": 4543,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_apply_feedback_candidate_overrides",
+          "lineno": 4546,
+          "end_lineno": 4594,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_feedback_bank_paths",
+          "lineno": 5454,
+          "end_lineno": 5459,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_parse_verifier_feedback_rows",
+          "lineno": 5571,
+          "end_lineno": 5684,
+          "description": "Collect verifier CSV rows and target-match candidates."
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_feedback_result_id",
+          "lineno": 5695,
+          "end_lineno": 5718,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_feedback_target_xyz",
+          "lineno": 5721,
+          "end_lineno": 5728,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_feedback_measured_xyz",
+          "lineno": 5731,
+          "end_lineno": 5738,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_feedback_capture_delta",
+          "lineno": 5775,
+          "end_lineno": 5788,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_legacy_feedback_observations",
+          "lineno": 5827,
+          "end_lineno": 5864,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_merge_feedback_observation",
+          "lineno": 5867,
+          "end_lineno": 5895,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_build_feedback_entry_stats",
+          "lineno": 5906,
+          "end_lineno": 5985,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "write_verifier_feedback_bank",
+          "lineno": 5988,
+          "end_lineno": 6014,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "write_verifier_failure_dictionary",
+          "lineno": 6016,
+          "end_lineno": 6314,
+          "description": "Legacy verifier failure aggregation/report writer."
+        }
+      ]
+    },
+    {
+      "phase": "Phase 5",
+      "item": "aggregate pass/fail records into CorrectionResponseProfile artifacts",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/response/multi_emitter_profile.py",
+        "rgbw_lut_builder/correction/residuals.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/correction/pass_fail_dictionary.py",
+        "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py"
+      ],
+      "patterns": [
+        "write_verifier_feedback_bank",
+        "_build_feedback_entry_stats",
+        "_legacy_feedback_observations"
+      ],
+      "math_refs": [
+        {
+          "label": "Correction response profiles and observed response curves",
+          "href": "../README_MATH_MODEL.md#correction-response-profiles-and-observed-response-curves"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/correction/pass_fail_dictionary.py",
+          "name": "write_verifier_feedback_bank",
+          "lineno": 186,
+          "end_lineno": 458,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_legacy_feedback_observations",
+          "lineno": 5827,
+          "end_lineno": 5864,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_build_feedback_entry_stats",
+          "lineno": 5906,
+          "end_lineno": 5985,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "write_verifier_feedback_bank",
+          "lineno": 5988,
+          "end_lineno": 6014,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "phase": "Phase 5",
+      "item": "fit simple ObservedResponseCurve summaries for W/no-W edge comparisons",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/correction/residuals.py",
+        "rgbw_lut_builder/response/multi_emitter_profile.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/correction/pass_fail_dictionary.py"
+      ],
+      "patterns": [
+        "write_verifier_feedback_bank",
+        "load_feedback_candidate_model_for_args"
+      ],
+      "math_refs": [
+        {
+          "label": "Correction response profiles and observed response curves",
+          "href": "../README_MATH_MODEL.md#correction-response-profiles-and-observed-response-curves"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/correction/pass_fail_dictionary.py",
+          "name": "load_feedback_candidate_model_for_args",
+          "lineno": 134,
+          "end_lineno": 183,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/correction/pass_fail_dictionary.py",
+          "name": "write_verifier_feedback_bank",
+          "lineno": 186,
+          "end_lineno": 458,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "phase": "Phase 5",
+      "item": "use learned response direction to bias correction candidates before live probing",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/correction/triangle_ranker.py",
+        "rgbw_lut_builder/correction/live_retry.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py"
+      ],
+      "patterns": [
+        "_resolve_target_match_candidates",
+        "_feedback_capture_delta",
+        "_merge_feedback_observation"
+      ],
+      "math_refs": [
+        {
+          "label": "Capture-cloud simplex correction",
+          "href": "../README_MATH_MODEL.md#12-capture-cloud-simplex-correction"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_feedback_capture_delta",
+          "lineno": 5775,
+          "end_lineno": 5788,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_resolve_target_match_candidates",
+          "lineno": 5791,
+          "end_lineno": 5824,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_merge_feedback_observation",
+          "lineno": 5867,
+          "end_lineno": 5895,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "phase": "Phase 5",
+      "item": "write diagnostics showing where virtual expansion helps, hurts, or remains uncertain",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/verify/reports.py",
+        "rgbw_lut_builder/verify/metrics.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+        "rgbw_lut_builder/gui/analyze_rgbw_captures.py"
+      ],
+      "patterns": [
+        "write_verifier_failure_dictionary",
+        "summarize"
+      ],
+      "math_refs": [
+        {
+          "label": "Why this helps edge colors",
+          "href": "../README_MATH_MODEL.md#why-this-helps-edge-colors"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/gui/analyze_rgbw_captures.py",
+          "name": "summarize_rows",
+          "lineno": 213,
+          "end_lineno": 251,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "write_verifier_failure_dictionary",
+          "lineno": 6016,
+          "end_lineno": 6314,
+          "description": "Legacy verifier failure aggregation/report writer."
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "summarize_build",
+          "lineno": 6344,
+          "end_lineno": 6367,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "phase": "Phase 6",
+      "item": "load emitter profiles with arbitrary channel counts",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/response/multi_emitter_profile.py",
+        "rgbw_lut_builder/model/emitter_classification.py"
+      ],
+      "sources": [],
+      "patterns": [],
+      "math_refs": [
+        {
+          "label": "Multi-emitter layered simplex model",
+          "href": "../README_MATH_MODEL.md#13-multi-emitter-layered-simplex-model"
+        }
+      ],
+      "candidate_functions": []
+    },
+    {
+      "phase": "Phase 6",
+      "item": "classify emitters by measured chromaticity relative to the device hull",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/model/emitter_classification.py"
+      ],
+      "sources": [],
+      "patterns": [],
+      "math_refs": [
+        {
+          "label": "Emitter classification",
+          "href": "../README_MATH_MODEL.md#emitter-classification"
+        }
+      ],
+      "candidate_functions": []
+    },
+    {
+      "phase": "Phase 6",
+      "item": "build outer-hull triangle fans for each inner anchor",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/model/layered_simplex.py",
+        "rgbw_lut_builder/model/simplex.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/legacy/xy_target_rgbw_model.py"
+      ],
+      "patterns": [
+        "_find_sub_gamut",
+        "_solve_xyz"
+      ],
+      "math_refs": [
+        {
+          "label": "General algorithm",
+          "href": "../README_MATH_MODEL.md#general-algorithm"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_find_sub_gamut",
+          "lineno": 407,
+          "end_lineno": 415,
+          "description": "Find the containing strict RGBW sub-gamut in xy space."
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_solve_xyz",
+          "lineno": 419,
+          "end_lineno": 437,
+          "description": "Shared 3-emitter XYZ linear solve primitive."
+        }
+      ]
+    },
+    {
+      "phase": "Phase 6",
+      "item": "solve RGBCCT-style warm/cool inner-anchor layers",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/model/layered_simplex.py"
+      ],
+      "sources": [],
+      "patterns": [],
+      "math_refs": [
+        {
+          "label": "RGBCCT / warm-cool inner-anchor model",
+          "href": "../README_MATH_MODEL.md#rgbcct--warm-cool-inner-anchor-model"
+        }
+      ],
+      "candidate_functions": []
+    },
+    {
+      "phase": "Phase 6",
+      "item": "solve RGBY/RGBV-style outer-hull-expanded packages",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/model/layered_simplex.py"
+      ],
+      "sources": [],
+      "patterns": [],
+      "math_refs": [
+        {
+          "label": "RGBY / RGBV / outer-hull expansion",
+          "href": "../README_MATH_MODEL.md#rgby--rgbv--outer-hull-expansion"
+        }
+      ],
+      "candidate_functions": []
+    },
+    {
+      "phase": "Phase 6",
+      "item": "share known-point / simplex expansion logic with capture-cloud correction",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/model/simplex.py",
+        "rgbw_lut_builder/correction/measured_simplex.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+        "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py"
+      ],
+      "patterns": [
+        "_solve_xyz",
+        "_nnls_solve",
+        "_resolve_target_match_candidates"
+      ],
+      "math_refs": [
+        {
+          "label": "Common simplex solve",
+          "href": "../README_MATH_MODEL.md#2-common-simplex-solve"
+        },
+        {
+          "label": "Capture-cloud simplex correction",
+          "href": "../README_MATH_MODEL.md#12-capture-cloud-simplex-correction"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_resolve_target_match_candidates",
+          "lineno": 5791,
+          "end_lineno": 5824,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_solve_xyz",
+          "lineno": 419,
+          "end_lineno": 437,
+          "description": "Shared 3-emitter XYZ linear solve primitive."
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_nnls_solve",
+          "lineno": 699,
+          "end_lineno": 713,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "phase": "Phase 6",
+      "item": "write diagnostics for hull classification, ambiguous edge emitters, and inner-anchor blends",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/verify/reports.py",
+        "rgbw_lut_builder/verify/metrics.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/gui/analyze_rgbw_captures.py"
+      ],
+      "patterns": [
+        ".*"
+      ],
+      "math_refs": [
+        {
+          "label": "Emitter classification",
+          "href": "../README_MATH_MODEL.md#emitter-classification"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/gui/analyze_rgbw_captures.py",
+          "name": "parse_args",
+          "lineno": 39,
+          "end_lineno": 51,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/analyze_rgbw_captures.py",
+          "name": "safe_int",
+          "lineno": 54,
+          "end_lineno": 58,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/analyze_rgbw_captures.py",
+          "name": "safe_float",
+          "lineno": 61,
+          "end_lineno": 65,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/analyze_rgbw_captures.py",
+          "name": "is_ok",
+          "lineno": 68,
+          "end_lineno": 69,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/analyze_rgbw_captures.py",
+          "name": "xyz_to_lab",
+          "lineno": 72,
+          "end_lineno": 88,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/analyze_rgbw_captures.py",
+          "name": "lab_to_lch",
+          "lineno": 91,
+          "end_lineno": 94,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/analyze_rgbw_captures.py",
+          "name": "family_name",
+          "lineno": 97,
+          "end_lineno": 98,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/analyze_rgbw_captures.py",
+          "name": "white_sweep_rank",
+          "lineno": 101,
+          "end_lineno": 105,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/analyze_rgbw_captures.py",
+          "name": "load_rows",
+          "lineno": 108,
+          "end_lineno": 175,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/analyze_rgbw_captures.py",
+          "name": "write_metrics_csv",
+          "lineno": 178,
+          "end_lineno": 210,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/analyze_rgbw_captures.py",
+          "name": "summarize_rows",
+          "lineno": 213,
+          "end_lineno": 251,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/analyze_rgbw_captures.py",
+          "name": "plot_xy_scatter",
+          "lineno": 254,
+          "end_lineno": 270,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/analyze_rgbw_captures.py",
+          "name": "plot_chroma_vs_white",
+          "lineno": 273,
+          "end_lineno": 287,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/analyze_rgbw_captures.py",
+          "name": "build_envelope",
+          "lineno": 290,
+          "end_lineno": 329,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/analyze_rgbw_captures.py",
+          "name": "write_envelope_csv",
+          "lineno": 332,
+          "end_lineno": 339,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/analyze_rgbw_captures.py",
+          "name": "plot_envelope_heatmap",
+          "lineno": 342,
+          "end_lineno": 373,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/analyze_rgbw_captures.py",
+          "name": "plot_family_sweeps",
+          "lineno": 376,
+          "end_lineno": 428,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/analyze_rgbw_captures.py",
+          "name": "main",
+          "lineno": 431,
+          "end_lineno": 460,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "phase": "Phase 6",
+      "item": "add degenerate inner-anchor line fallback for overdrive prediction models",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/model/layered_simplex.py",
+        "rgbw_lut_builder/model/simplex.py"
+      ],
+      "sources": [],
+      "patterns": [],
+      "math_refs": [
+        {
+          "label": "Degenerate inner-anchor line fallback",
+          "href": "../README_MATH_MODEL.md#degenerate-inner-anchor-line-fallback"
+        }
+      ],
+      "candidate_functions": []
+    },
+    {
+      "phase": "Phase 6",
+      "item": "ensure strict sub-gamut mode continues to solve only direct legal edge/hull pairs",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/model/topology.py",
+        "rgbw_lut_builder/model/layered_simplex.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/model/topology.py",
+        "rgbw_lut_builder/legacy/xy_target_rgbw_model.py"
+      ],
+      "patterns": [
+        "_find_sub_gamut",
+        "_solve_subgamut_fraction_from_linear"
+      ],
+      "math_refs": [
+        {
+          "label": "Strict RGBW sub-gamut model",
+          "href": "../README_MATH_MODEL.md#6-strict-rgbw-sub-gamut-model"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_find_sub_gamut",
+          "lineno": 407,
+          "end_lineno": 415,
+          "description": "Find the containing strict RGBW sub-gamut in xy space."
+        },
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "_solve_subgamut_fraction_from_linear",
+          "lineno": 2820,
+          "end_lineno": 2859,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "phase": "Phase 7",
+      "item": "fit conservative residual correction maps",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/correction/correction_field.py",
+        "rgbw_lut_builder/correction/residuals.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/gui/analyze_rgbw_captures.py",
+        "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py"
+      ],
+      "patterns": [
+        ".*residual.*",
+        "_feedback_.*"
+      ],
+      "math_refs": [
+        {
+          "label": "Capture-cloud simplex correction",
+          "href": "../README_MATH_MODEL.md#12-capture-cloud-simplex-correction"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_feedback_rgb_key_from_rgb",
+          "lineno": 4342,
+          "end_lineno": 4344,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_feedback_rgbw_family_index",
+          "lineno": 4347,
+          "end_lineno": 4359,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_feedback_observation_sort_value",
+          "lineno": 4362,
+          "end_lineno": 4375,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_feedback_ok_value",
+          "lineno": 4378,
+          "end_lineno": 4384,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_feedback_obs_from_verifier_row",
+          "lineno": 4387,
+          "end_lineno": 4422,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_iter_feedback_bank_observations",
+          "lineno": 4425,
+          "end_lineno": 4467,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "build_feedback_candidate_model_from_observations",
+          "lineno": 4470,
+          "end_lineno": 4533,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "load_feedback_candidate_model_for_args",
+          "lineno": 4536,
+          "end_lineno": 4543,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_apply_feedback_candidate_overrides",
+          "lineno": 4546,
+          "end_lineno": 4594,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_feedback_bank_paths",
+          "lineno": 5454,
+          "end_lineno": 5459,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_parse_verifier_feedback_rows",
+          "lineno": 5571,
+          "end_lineno": 5684,
+          "description": "Collect verifier CSV rows and target-match candidates."
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_feedback_result_id",
+          "lineno": 5695,
+          "end_lineno": 5718,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_feedback_target_xyz",
+          "lineno": 5721,
+          "end_lineno": 5728,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_feedback_measured_xyz",
+          "lineno": 5731,
+          "end_lineno": 5738,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_feedback_capture_delta",
+          "lineno": 5775,
+          "end_lineno": 5788,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_legacy_feedback_observations",
+          "lineno": 5827,
+          "end_lineno": 5864,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_merge_feedback_observation",
+          "lineno": 5867,
+          "end_lineno": 5895,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_build_feedback_entry_stats",
+          "lineno": 5906,
+          "end_lineno": 5985,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "write_verifier_feedback_bank",
+          "lineno": 5988,
+          "end_lineno": 6014,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "phase": "Phase 7",
+      "item": "build/rank local measured triangle/simplex candidates",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/correction/measured_simplex.py",
+        "rgbw_lut_builder/correction/triangle_ranker.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py"
+      ],
+      "patterns": [
+        "_resolve_target_match_candidates",
+        "_parse_target_match_row",
+        "_resolve_best_capture_xyz"
+      ],
+      "math_refs": [
+        {
+          "label": "Common simplex solve",
+          "href": "../README_MATH_MODEL.md#2-common-simplex-solve"
+        },
+        {
+          "label": "Capture-cloud simplex correction",
+          "href": "../README_MATH_MODEL.md#12-capture-cloud-simplex-correction"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_parse_target_match_row",
+          "lineno": 5469,
+          "end_lineno": 5489,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_resolve_best_capture_xyz",
+          "lineno": 5523,
+          "end_lineno": 5568,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_resolve_target_match_candidates",
+          "lineno": 5791,
+          "end_lineno": 5824,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "phase": "Phase 7",
+      "item": "apply corrections to model candidates",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/correction/correction_field.py",
+        "rgbw_lut_builder/correction/residuals.py",
+        "rgbw_lut_builder/build/offline_measured.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/build/model_only.py",
+        "rgbw_lut_builder/gui/build_measured_rgbw_lut.py"
+      ],
+      "patterns": [
+        "build_model_lut_cube",
+        "summarize"
+      ],
+      "math_refs": [
+        {
+          "label": "Capture-cloud simplex correction",
+          "href": "../README_MATH_MODEL.md#12-capture-cloud-simplex-correction"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/gui/build_measured_rgbw_lut.py",
+          "name": "summarize",
+          "lineno": 367,
+          "end_lineno": 419,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "phase": "Phase 7",
+      "item": "use pass/fail dictionary as final override/block",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/correction/pass_fail_dictionary.py",
+        "rgbw_lut_builder/correction/correction_field.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/correction/pass_fail_dictionary.py"
+      ],
+      "patterns": [
+        "write_verifier_feedback_bank",
+        "load_feedback_candidate_model_for_args"
+      ],
+      "math_refs": [
+        {
+          "label": "Correction response profiles and observed response curves",
+          "href": "../README_MATH_MODEL.md#correction-response-profiles-and-observed-response-curves"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/correction/pass_fail_dictionary.py",
+          "name": "load_feedback_candidate_model_for_args",
+          "lineno": 134,
+          "end_lineno": 183,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/correction/pass_fail_dictionary.py",
+          "name": "write_verifier_feedback_bank",
+          "lineno": 186,
+          "end_lineno": 458,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "phase": "Phase 7",
+      "item": "write before/after diagnostics",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/verify/reports.py",
+        "rgbw_lut_builder/verify/metrics.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/gui/analyze_rgbw_captures.py",
+        "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py"
+      ],
+      "patterns": [
+        "summarize",
+        "write_verifier_failure_dictionary"
+      ],
+      "math_refs": [],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/gui/analyze_rgbw_captures.py",
+          "name": "summarize_rows",
+          "lineno": 213,
+          "end_lineno": 251,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "write_verifier_failure_dictionary",
+          "lineno": 6016,
+          "end_lineno": 6314,
+          "description": "Legacy verifier failure aggregation/report writer."
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "summarize_build",
+          "lineno": 6344,
+          "end_lineno": 6367,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "phase": "Phase 8",
+      "item": "builder sends capture requests to host_calibration_gui",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/captures/udp_client.py",
+        "rgbw_lut_builder/build/live_measured.py"
+      ],
+      "sources": [
+        "tools/run_live_capture.py",
+        "rgbw_lut_builder/captures/udp_client.py",
+        "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py"
+      ],
+      "patterns": [
+        ".*"
+      ],
+      "math_refs": [],
+      "candidate_functions": [
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_spotread_command_with_one_shot",
+          "lineno": 108,
+          "end_lineno": 119,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_generate_verifier_patches",
+          "lineno": 176,
+          "end_lineno": 236,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_lut_axis_position",
+          "lineno": 239,
+          "end_lineno": 250,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_clamp_lut_result",
+          "lineno": 253,
+          "end_lineno": 256,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_trilinear_lut_lookup",
+          "lineno": 259,
+          "end_lineno": 284,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_tetrahedral_lut_lookup",
+          "lineno": 287,
+          "end_lineno": 331,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_lut_lookup",
+          "lineno": 334,
+          "end_lineno": 342,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_xy_to_xyz1_tuple",
+          "lineno": 374,
+          "end_lineno": 376,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_build_rgb_to_xyz_matrix",
+          "lineno": 379,
+          "end_lineno": 387,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_apply_transfer_normalized",
+          "lineno": 396,
+          "end_lineno": 413,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_expected_xy_for_named_gamut",
+          "lineno": 416,
+          "end_lineno": 429,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_xyz_to_xy_tuple",
+          "lineno": 433,
+          "end_lineno": 439,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_point_in_triangle_xy",
+          "lineno": 442,
+          "end_lineno": 457,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_closest_point_on_segment_xy",
+          "lineno": 460,
+          "end_lineno": 471,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_project_xy_to_hull",
+          "lineno": 474,
+          "end_lineno": 505,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_xyY_to_XYZ",
+          "lineno": 509,
+          "end_lineno": 516,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_nnls_small",
+          "lineno": 519,
+          "end_lineno": 551,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_compute_model_scale_k",
+          "lineno": 554,
+          "end_lineno": 575,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_model_project_xy_for_named_gamut",
+          "lineno": 578,
+          "end_lineno": 638,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_xy_chroma_de",
+          "lineno": 642,
+          "end_lineno": 666,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "main",
+          "lineno": 2877,
+          "end_lineno": 2880,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "phase": "Phase 8",
+      "item": "receive full spotread measurement payloads",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/captures/spotread_protocol.py",
+        "rgbw_lut_builder/build/live_measured.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/captures/spotread_protocol.py",
+        "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py"
+      ],
+      "patterns": [
+        ".*"
+      ],
+      "math_refs": [],
+      "candidate_functions": [
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_spotread_command_with_one_shot",
+          "lineno": 108,
+          "end_lineno": 119,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_generate_verifier_patches",
+          "lineno": 176,
+          "end_lineno": 236,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_lut_axis_position",
+          "lineno": 239,
+          "end_lineno": 250,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_clamp_lut_result",
+          "lineno": 253,
+          "end_lineno": 256,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_trilinear_lut_lookup",
+          "lineno": 259,
+          "end_lineno": 284,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_tetrahedral_lut_lookup",
+          "lineno": 287,
+          "end_lineno": 331,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_lut_lookup",
+          "lineno": 334,
+          "end_lineno": 342,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_xy_to_xyz1_tuple",
+          "lineno": 374,
+          "end_lineno": 376,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_build_rgb_to_xyz_matrix",
+          "lineno": 379,
+          "end_lineno": 387,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_apply_transfer_normalized",
+          "lineno": 396,
+          "end_lineno": 413,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_expected_xy_for_named_gamut",
+          "lineno": 416,
+          "end_lineno": 429,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_xyz_to_xy_tuple",
+          "lineno": 433,
+          "end_lineno": 439,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_point_in_triangle_xy",
+          "lineno": 442,
+          "end_lineno": 457,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_closest_point_on_segment_xy",
+          "lineno": 460,
+          "end_lineno": 471,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_project_xy_to_hull",
+          "lineno": 474,
+          "end_lineno": 505,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_xyY_to_XYZ",
+          "lineno": 509,
+          "end_lineno": 516,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_nnls_small",
+          "lineno": 519,
+          "end_lineno": 551,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_compute_model_scale_k",
+          "lineno": 554,
+          "end_lineno": 575,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_verifier_model_project_xy_for_named_gamut",
+          "lineno": 578,
+          "end_lineno": 638,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "_xy_chroma_de",
+          "lineno": 642,
+          "end_lineno": 666,
+          "description": ""
+        },
+        {
+          "module_path": "FILES_FOR_TRANSITION/host_calibration_gui_pipeline_ready_udp_capture_spotread_protocol_model_projection.py",
+          "name": "main",
+          "lineno": 2877,
+          "end_lineno": 2880,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "phase": "Phase 8",
+      "item": "update pass/fail dictionary during calibration",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/correction/pass_fail_dictionary.py",
+        "rgbw_lut_builder/correction/live_retry.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/correction/pass_fail_dictionary.py",
+        "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py"
+      ],
+      "patterns": [
+        "write_verifier_feedback_bank",
+        "_merge_feedback_observation"
+      ],
+      "math_refs": [
+        {
+          "label": "Capture-cloud simplex correction",
+          "href": "../README_MATH_MODEL.md#12-capture-cloud-simplex-correction"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/correction/pass_fail_dictionary.py",
+          "name": "write_verifier_feedback_bank",
+          "lineno": 186,
+          "end_lineno": 458,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_merge_feedback_observation",
+          "lineno": 5867,
+          "end_lineno": 5895,
+          "description": ""
+        },
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "write_verifier_feedback_bank",
+          "lineno": 5988,
+          "end_lineno": 6014,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "phase": "Phase 8",
+      "item": "retry candidate corrections until pass or retry budget exhausted",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/correction/live_retry.py",
+        "rgbw_lut_builder/build/live_measured.py"
+      ],
+      "sources": [
+        "tools/run_live_capture.py",
+        "rgbw_lut_builder/gui/prototype_measured_white_solver.py"
+      ],
+      "patterns": [
+        ".*retry.*",
+        ".*probe.*"
+      ],
+      "math_refs": [
+        {
+          "label": "Capture-cloud simplex correction",
+          "href": "../README_MATH_MODEL.md#12-capture-cloud-simplex-correction"
+        }
+      ],
+      "candidate_functions": []
+    },
+    {
+      "phase": "Phase 8",
+      "item": "save live_capture_session.jsonl and live_retry_trace.csv",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/build/live_measured.py",
+        "rgbw_lut_builder/verify/reports.py"
+      ],
+      "sources": [
+        "tools/run_live_capture.py",
+        "rgbw_lut_builder/gui/prototype_measured_white_solver.py"
+      ],
+      "patterns": [
+        ".*trace.*",
+        ".*session.*"
+      ],
+      "math_refs": [],
+      "candidate_functions": []
+    },
+    {
+      "phase": "Phase 9",
+      "item": "RGB8 / RGB16",
+      "status": "active",
+      "targets": [
+        "rgbw_lut_builder/output/rgb8.py",
+        "rgbw_lut_builder/output/rgb16.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/build/model_only.py",
+        "rgbw_lut_builder/build/lut_writer.py"
+      ],
+      "patterns": [
+        "build_model_lut_cube",
+        "save_lut_npy"
+      ],
+      "math_refs": [],
+      "candidate_functions": []
+    },
+    {
+      "phase": "Phase 9",
+      "item": "RGBW8 / RGBW16",
+      "status": "active",
+      "targets": [
+        "rgbw_lut_builder/output/rgbw8.py",
+        "rgbw_lut_builder/output/rgbw16.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/build/model_only.py",
+        "rgbw_lut_builder/build/lut_writer.py"
+      ],
+      "patterns": [
+        "build_model_lut_cube",
+        "write_rgbw_header",
+        "save_lut_npy"
+      ],
+      "math_refs": [],
+      "candidate_functions": []
+    },
+    {
+      "phase": "Phase 9",
+      "item": "generic channels16 outputs",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/output/channels16.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/build/lut_writer.py"
+      ],
+      "patterns": [
+        "write_rgbw_header",
+        "save_lut_npy"
+      ],
+      "math_refs": [],
+      "candidate_functions": []
+    },
+    {
+      "phase": "Phase 9",
+      "item": "TemporalBFI encoder",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/output/temporal_bfi_encoder.py"
+      ],
+      "sources": [
+        "tools/convert_temporal_bfi_dataset.py"
+      ],
+      "patterns": [
+        ".*"
+      ],
+      "math_refs": [],
+      "candidate_functions": []
+    },
+    {
+      "phase": "Phase 9",
+      "item": "APA102 encoder",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/output/apa102_encoder.py"
+      ],
+      "sources": [],
+      "patterns": [],
+      "math_refs": [],
+      "candidate_functions": []
+    },
+    {
+      "phase": "Phase 9",
+      "item": "HD108 encoder",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/output/hd108_encoder.py"
+      ],
+      "sources": [],
+      "patterns": [],
+      "math_refs": [],
+      "candidate_functions": []
+    },
+    {
+      "phase": "Phase 9",
+      "item": "HyperHDR export",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/output/hyperhdr_export.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/gui/rgbw_lut_gui.py"
+      ],
+      "patterns": [
+        ".*hyperhdr.*"
+      ],
+      "math_refs": [],
+      "candidate_functions": []
+    },
+    {
+      "phase": "Phase 9",
+      "item": "C header export",
+      "status": "active",
+      "targets": [
+        "rgbw_lut_builder/output/c_header_export.py",
+        "rgbw_lut_builder/output/mcu_header_export.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/build/lut_writer.py",
+        "rgbw_lut_builder/legacy/xy_target_rgbw_model.py"
+      ],
+      "patterns": [
+        "write_rgbw_header",
+        "write_lut_header"
+      ],
+      "math_refs": [],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/legacy/xy_target_rgbw_model.py",
+          "name": "write_lut_header",
+          "lineno": 3467,
+          "end_lineno": 3497,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "phase": "Phase 9",
+      "item": "binary cube export",
+      "status": "active",
+      "targets": [
+        "rgbw_lut_builder/output/binary_cube_export.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/build/lut_writer.py"
+      ],
+      "patterns": [
+        "save_lut_npy"
+      ],
+      "math_refs": [],
+      "candidate_functions": []
+    },
+    {
+      "phase": "Phase 9",
+      "item": "coefficient tetrahedral cube export",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/output/coefficient_cube_export.py"
+      ],
+      "sources": [
+        "rgbw_lut_builder/output/binary_cube_export.py",
+        "rgbw_lut_builder/runtime/"
+      ],
+      "patterns": [],
+      "math_refs": [
+        {
+          "label": "Tetrahedral LUT interpolation",
+          "href": "../README_MATH_MODEL.md#14-tetrahedral-lut-interpolation"
+        }
+      ],
+      "candidate_functions": []
+    },
+    {
+      "phase": "Phase 9",
+      "item": "MCU/SBC size-report tooling for 8 / 16 / 32 MB PSRAM targets",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/output/mcu_header_export.py",
+        "rgbw_lut_builder/output/coefficient_cube_export.py"
+      ],
+      "sources": [],
+      "patterns": [],
+      "math_refs": [],
+      "candidate_functions": []
+    },
+    {
+      "phase": "Phase 9",
+      "item": "reference fixed-point tetrahedral samplers",
+      "status": "planned",
+      "targets": [
+        "rgbw_lut_builder/runtime/tetra_sampler_c_reference.c",
+        "rgbw_lut_builder/runtime/tetra_sampler_cpp.hpp",
+        "rgbw_lut_builder/runtime/tetra_sampler_arduino.hpp"
+      ],
+      "sources": [
+        "rgbw_lut_builder/runtime/"
+      ],
+      "patterns": [],
+      "math_refs": [
+        {
+          "label": "Tetrahedral LUT interpolation",
+          "href": "../README_MATH_MODEL.md#14-tetrahedral-lut-interpolation"
+        }
+      ],
+      "candidate_functions": []
+    },
+    {
+      "phase": "Phase 10",
+      "item": "use model confidence and correction uncertainty to choose new probes",
+      "status": "planned",
+      "targets": [
+        "tools/generate_capture_plan.py",
+        "rgbw_lut_builder/verify/metrics.py"
+      ],
+      "sources": [
+        "tools/generate_capture_plan.py",
+        "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py"
+      ],
+      "patterns": [
+        ".*plan.*",
+        "_build_feedback_entry_stats"
+      ],
+      "math_refs": [
+        {
+          "label": "Capture-cloud simplex correction",
+          "href": "../README_MATH_MODEL.md#12-capture-cloud-simplex-correction"
+        },
+        {
+          "label": "Correction response profiles and observed response curves",
+          "href": "../README_MATH_MODEL.md#correction-response-profiles-and-observed-response-curves"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_build_feedback_entry_stats",
+          "lineno": 5906,
+          "end_lineno": 5985,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "phase": "Phase 10",
+      "item": "support sparse capture sets for normal users",
+      "status": "planned",
+      "targets": [
+        "tools/generate_capture_plan.py"
+      ],
+      "sources": [
+        "tools/generate_capture_plan.py"
+      ],
+      "patterns": [
+        ".*plan.*"
+      ],
+      "math_refs": [],
+      "candidate_functions": []
+    },
+    {
+      "phase": "Phase 10",
+      "item": "support dense research datasets for advanced calibration",
+      "status": "planned",
+      "targets": [
+        "tools/generate_capture_plan.py",
+        "rgbw_lut_builder/response/temporal_bfi.py"
+      ],
+      "sources": [
+        "tools/generate_capture_plan.py",
+        "tools/convert_temporal_bfi_dataset.py"
+      ],
+      "patterns": [
+        ".*plan.*"
+      ],
+      "math_refs": [],
+      "candidate_functions": []
+    },
+    {
+      "phase": "Phase 10",
+      "item": "stop capturing once each region has enough support",
+      "status": "planned",
+      "targets": [
+        "tools/generate_capture_plan.py",
+        "rgbw_lut_builder/verify/metrics.py"
+      ],
+      "sources": [
+        "tools/generate_capture_plan.py",
+        "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py"
+      ],
+      "patterns": [
+        ".*plan.*",
+        "_build_feedback_entry_stats"
+      ],
+      "math_refs": [
+        {
+          "label": "Capture-cloud simplex correction",
+          "href": "../README_MATH_MODEL.md#12-capture-cloud-simplex-correction"
+        }
+      ],
+      "candidate_functions": [
+        {
+          "module_path": "rgbw_lut_builder/gui/build_delaunay_rgbw_lut.py",
+          "name": "_build_feedback_entry_stats",
+          "lineno": 5906,
+          "end_lineno": 5985,
+          "description": ""
+        }
+      ]
+    }
+  ]
+}

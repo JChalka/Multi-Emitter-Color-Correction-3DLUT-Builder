@@ -1211,142 +1211,157 @@ rgbw-lut-build \
 
 ## Roadmap phases
 
-## Phase 1 status snapshot
+Use the tracker below as the canonical progress view.
+
+Status meanings:
+
+| Status | Meaning |
+| --- | --- |
+| done | The roadmap item has landed in repo-owned code and the pinned work below is the current ownership/evidence. |
+| active | Some of the intended ownership is landed, but the roadmap item is not fully closed yet. |
+| planned | The roadmap item is still design/backlog work with no pinned implementation yet. |
+
+Rule for updates:
+
+| What changes | How to update this roadmap |
+| --- | --- |
+| A roadmap item lands code | Update the row for that exact roadmap item, not a separate snapshot block. |
+| Work is partial | Mark the row `active` and pin the exact files/commands already landed. |
+| Work is complete | Mark the row `done` and keep the concrete owner modules in the same row. |
+
+Detailed move map and function inventory:
+
+| Lookup surface | Purpose |
+| --- | --- |
+| [docs/project_function_tree.md](docs/project_function_tree.md) | Phase-by-phase move map with target modules, current source surfaces, and candidate functions that still need to move or be reused. |
+| [docs/project_function_tree.json](docs/project_function_tree.json) | Machine-readable inventory of the same module tree and roadmap move plan. |
+
+Regenerate the inventory with:
 
 ```text
-completed now:
-  split roadmap and math-model documentation
-  copied rgbw_lut_gui and the current measured/delaunay support modules into the standalone package
-  fixed standalone package-local imports for the transitioned GUI modules
-  added shared standalone project/config path defaults under rgbw_lut_builder.paths
-  moved GUI state/config defaults under repo-scoped config/ instead of beside package source files
-  added pyproject.toml and console entrypoints for the currently transitioned surfaces
-  added tools/build_lut.py as a single front-door dispatcher for gui / measured / delaunay / analyze
-
-still pending inside phase 1:
-  move more reusable Delaunay/worker/memory/export utilities out of gui-era modules and into their target packages
-  separate legacy/reference solver surfaces from the future build/ package API
-  standardize WX metadata names outside the currently transitioned GUI path
+python tools/generate_function_tree.py
 ```
+
+Use the roadmap rows below for task-level status and ownership, then use the function tree doc when you need to answer "which function moves from where into what file next?"
 
 ### Phase 1: repository split and cleanup
 
-```text
-move rgbw_lut_gui into standalone repo
-move reusable Delaunay/worker/memory/export utilities
-move math-model builder into package modules
-separate legacy solver modes from new model-measured mode
-standardize WX mode names and metadata
-standardize metadata and config paths
-split roadmap and math-model documentation
-```
+| Roadmap item | Status | Move target / source | Math / prototype | Pinned work |
+| --- | --- | --- | --- | --- |
+| move rgbw_lut_gui into standalone repo | done | `FILES_FOR_TRANSITION/rgbw_lut_gui.py -> rgbw_lut_builder/gui/rgbw_lut_gui.py`; entry surface `tools/build_lut.py` | n/a | `rgbw_lut_builder/gui/rgbw_lut_gui.py` is running from the standalone package and `tools/build_lut.py` exposes `gui` as a front door. |
+| move reusable Delaunay/worker/memory/export utilities | done | Transitional/legacy Delaunay plumbing -> `rgbw_lut_builder/build/{diagnostics,live_measured,lut_writer}.py`, `rgbw_lut_builder/captures/{loaders,validators}.py`, `rgbw_lut_builder/correction/pass_fail_dictionary.py` | n/a | Shared ownership moved into those package modules; deprecated `gui/build_delaunay_rgbw_lut.py` now delegates those slices. |
+| move math-model builder into package modules | done | `FILES_FOR_TRANSITION/xy_target_rgbw_model.py -> rgbw_lut_builder/legacy/xy_target_rgbw_model.py`, then staged into `rgbw_lut_builder/model/*` and `rgbw_lut_builder/build/model_only.py` | [README_MATH_MODEL.md](README_MATH_MODEL.md) | Legacy handoff lives in `rgbw_lut_builder/legacy/xy_target_rgbw_model.py`, with package-owned model/build entrypoints in `rgbw_lut_builder/model/*` and `rgbw_lut_builder/build/model_only.py`. |
+| separate legacy solver modes from new model-measured mode | done | Split package front doors between `tools/build_lut.py` surfaces and `rgbw_lut_builder/build/model_only.py legacy-cli` passthrough | n/a | `tools/build_lut.py` exposes distinct surfaces and `rgbw_lut_builder/build/model_only.py` separates package-owned model entrypoints from `legacy-cli` passthrough. |
+| standardize WX mode names and metadata | done | Legacy WX aliases/naming -> `rgbw_lut_builder/model/wx_modes.py` | [WX / white-overdrive model family](README_MATH_MODEL.md#7-wx--white-overdrive-model-family) | Canonical WX naming and alias normalization now live in `rgbw_lut_builder/model/wx_modes.py`. |
+| standardize metadata and config paths | done | Source-adjacent config/output writes -> `rgbw_lut_builder/paths.py` and repo-scoped `config/` | n/a | Standalone defaults now live in `rgbw_lut_builder/paths.py` and GUI state/config writes are repo-scoped under `config/`. |
+| split roadmap and math-model documentation | done | Integration tracking stays here; equations/prototypes stay in `README_MATH_MODEL.md` | [README_MATH_MODEL.md](README_MATH_MODEL.md) | Integration tracking remains in this file and model equations/details stay in `README_MATH_MODEL.md`. |
 
 ### Phase 2: RGB and RGBW model unification
 
-```text
-add explicit RGB-only model path
-keep RGBW strict sub-gamut model path
-add explicit WX radial virtual-primary model path
-keep LP max-white as wx_lp_legacy reference path
-add wx_virtual_axis_maxbright as a first-class high-brightness WX path
-share gamut transforms and hull projection
-share tetrahedral LUT sampling assumptions
-add output-family metadata everywhere
-```
+| Roadmap item | Status | Move target / source | Math / prototype | Pinned work |
+| --- | --- | --- | --- | --- |
+| add explicit RGB-only model path | done | Legacy RGB-only transform/projection/3-point solve -> `rgbw_lut_builder/model/rgb_model.py` and `rgbw_lut_builder/build/model_only.py` | [RGB-only model](README_MATH_MODEL.md#5-rgb-only-model), [Out-of-hull projection](README_MATH_MODEL.md#3-out-of-hull-projection) | `rgbw_lut_builder/model/rgb_model.py` owns the RGB-only solve path and `rgbw_lut_builder/build/model_only.py build-cube --model-family rgb` now emits package-owned RGB16 LUTs. |
+| keep RGBW strict sub-gamut model path | done | Legacy strict sub-gamut helpers -> `rgbw_lut_builder/model/topology.py` and `rgbw_lut_builder/model/rgbw_model.py` | [Strict RGBW sub-gamut model](README_MATH_MODEL.md#6-strict-rgbw-sub-gamut-model), [Common simplex solve](README_MATH_MODEL.md#2-common-simplex-solve) | `rgbw_lut_builder/model/rgbw_model.py` owns the strict RGBW solve path and `build-cube --model-family rgbw --method strict_subgamut` is the package-owned cube route. |
+| add explicit WX radial virtual-primary model path | done | Legacy `_wx_radial_*` / virtual-primary solve surfaces -> `rgbw_lut_builder/model/wx_modes.py` and `rgbw_lut_builder/model/rgbw_model.py` | [WX family](README_MATH_MODEL.md#7-wx--white-overdrive-model-family), [WX common structure](README_MATH_MODEL.md#8-wx-common-virtual-primary-structure), [Preferred wx_radial_virtual](README_MATH_MODEL.md#9-preferred-wx-mode-wx_radial_virtual) | `rgbw_lut_builder/model/wx_modes.py` and `rgbw_lut_builder/model/rgbw_model.py` expose the canonical `wx_radial_virtual` route through the package model API. |
+| keep LP max-white as wx_lp_legacy reference path | done | Legacy LP/max-white WX solve -> `rgbw_lut_builder/model/wx_modes.py` and `rgbw_lut_builder/model/rgbw_model.py` | [Reference wx_lp_legacy](README_MATH_MODEL.md#10-reference-wx-mode-wx_lp_legacy) | `wx_lp_legacy` remains a canonical selectable mode through `rgbw_lut_builder/model/wx_modes.py` and the package RGBW model surface. |
+| add wx_virtual_axis_maxbright as a first-class high-brightness WX path | done | Legacy virtual-axis WX solve -> `rgbw_lut_builder/model/wx_modes.py` and `rgbw_lut_builder/model/rgbw_model.py` | [Max-brightness wx_virtual_axis_maxbright](README_MATH_MODEL.md#11-max-brightness-wx-mode-wx_virtual_axis_maxbright) | `wx_virtual_axis_maxbright` is normalized as a first-class mode and smoke-validated through `tools/build_lut.py model-only build-cube --model-family rgbw --method wx --wx-mode wx_virtual_axis_maxbright`. |
+| share gamut transforms and hull projection | done | Legacy conversion/projection/barycentric helpers -> `rgbw_lut_builder/model/{gamuts,projection,simplex,topology}.py` | [Source gamut conversion](README_MATH_MODEL.md#source-gamut-conversion), [Common simplex solve](README_MATH_MODEL.md#2-common-simplex-solve), [Out-of-hull projection](README_MATH_MODEL.md#3-out-of-hull-projection) | `rgbw_lut_builder/model/projection.py` now owns strict LED-hull projection, `rgbw_lut_builder/model/simplex.py` owns the shared barycentric/NNLS/chromaticity primitives, and the package RGB/RGBW solvers use those owners directly. |
+| share tetrahedral LUT sampling assumptions | planned | Planned owner is `rgbw_lut_builder/model/interpolation/*` plus `rgbw_lut_builder/output/coefficient_cube_export.py` and runtime samplers under `rgbw_lut_builder/runtime/` | [Tetrahedral LUT interpolation](README_MATH_MODEL.md#14-tetrahedral-lut-interpolation) | The package targets exist as placeholders; candidate source/build surfaces are tracked in `docs/project_function_tree.md`. |
+| add output-family metadata everywhere | active | Current summary metadata in `rgbw_lut_builder/build/model_only.py` -> propagate into `rgbw_lut_builder/output/*` and `rgbw_lut_builder/verify/reports.py` | n/a | Package-owned model cube summaries now write `output_family` and `output_channels` in `rgbw_lut_builder/build/model_only.py`, but the same metadata still needs to be propagated consistently across all builders/verifiers/exports. |
 
 ### Phase 3: measured response providers
 
-```text
-implement ChannelResponseProvider API
-load fill16 channel ramps
-load hardcoded fallback ramps
-add TemporalBFI dense response backend with chunked/indexed lookup
-add HybridResponseProvider source precedence
-```
+| Roadmap item | Status | Move target / source | Math / prototype | Pinned work |
+| --- | --- | --- | --- | --- |
+| implement ChannelResponseProvider API | planned | Legacy channel-response/ramp helpers from `rgbw_lut_builder/legacy/xy_target_rgbw_model.py` -> `rgbw_lut_builder/response/base.py` | [Correction response profiles and observed response curves](README_MATH_MODEL.md#correction-response-profiles-and-observed-response-curves) | `rgbw_lut_builder/response/base.py` exists as the target owner; detailed candidate helper functions are pinned in `docs/project_function_tree.md`. |
+| load fill16 channel ramps | planned | Legacy per-channel ramp lookup plus capture loaders -> `rgbw_lut_builder/response/fill16_ramps.py` | n/a | `rgbw_lut_builder/response/fill16_ramps.py` exists as the target owner; candidate load/lookup functions are pinned in `docs/project_function_tree.md`. |
+| load hardcoded fallback ramps | planned | Legacy strict Y/XYZ fallback curves and constants -> `rgbw_lut_builder/response/hardcoded_ramps.py` | n/a | `rgbw_lut_builder/response/hardcoded_ramps.py` exists as the target owner; candidate fallback helpers are pinned in `docs/project_function_tree.md`. |
+| add TemporalBFI dense response backend with chunked/indexed lookup | planned | TemporalBFI conversion/host-capture surfaces -> `rgbw_lut_builder/response/temporal_bfi.py` | n/a | `rgbw_lut_builder/response/temporal_bfi.py` exists as the target owner; source surfaces are tracked in `docs/project_function_tree.md`. |
+| add HybridResponseProvider source precedence | planned | Response-provider composition -> `rgbw_lut_builder/response/hybrid.py` | n/a | `rgbw_lut_builder/response/hybrid.py` exists as the target owner and will compose `base`, `fill16_ramps`, `hardcoded_ramps`, and `temporal_bfi`. |
 
 ### Phase 4: model-vs-capture diagnostics
 
-```text
-load patch captures
-compute model prediction for each capture
-compare strict_subgamut, wx_radial_virtual, wx_virtual_axis_maxbright, and wx_lp_legacy residuals
-write model_vs_capture_report.csv
-separate results by gamut, transfer, output family, topology, and Y bucket
-reuse existing verifier/pass-fail dictionary structure
-```
+| Roadmap item | Status | Move target / source | Math / prototype | Pinned work |
+| --- | --- | --- | --- | --- |
+| load patch captures | planned | Capture loaders plus analyze surfaces -> `rgbw_lut_builder/verify/verifier.py` and `rgbw_lut_builder/captures/loaders.py` | [Capture-cloud simplex correction](README_MATH_MODEL.md#12-capture-cloud-simplex-correction) | `rgbw_lut_builder/verify/verifier.py` exists as the target owner; capture-loading candidates are pinned in `docs/project_function_tree.md`. |
+| compute model prediction for each capture | planned | Legacy `verify_captures` / `_predict_xyz_from_rgbw16` plus package model entrypoints -> `rgbw_lut_builder/verify/verifier.py` and `rgbw_lut_builder/build/model_only.py` | [RGB-only model](README_MATH_MODEL.md#5-rgb-only-model), [Strict RGBW sub-gamut model](README_MATH_MODEL.md#6-strict-rgbw-sub-gamut-model), [WX family](README_MATH_MODEL.md#7-wx--white-overdrive-model-family) | The target owners exist; source candidate functions are pinned in `docs/project_function_tree.md`. |
+| compare strict_subgamut, wx_radial_virtual, wx_virtual_axis_maxbright, and wx_lp_legacy residuals | planned | Legacy verification/report logic -> `rgbw_lut_builder/verify/{metrics,reports}.py` | [Strict RGBW sub-gamut model](README_MATH_MODEL.md#6-strict-rgbw-sub-gamut-model), [Preferred wx_radial_virtual](README_MATH_MODEL.md#9-preferred-wx-mode-wx_radial_virtual), [Reference wx_lp_legacy](README_MATH_MODEL.md#10-reference-wx-mode-wx_lp_legacy), [Max-brightness wx_virtual_axis_maxbright](README_MATH_MODEL.md#11-max-brightness-wx-mode-wx_virtual_axis_maxbright) | `rgbw_lut_builder/verify/metrics.py` and `rgbw_lut_builder/verify/reports.py` exist as targets; source mode-comparison functions are pinned in `docs/project_function_tree.md`. |
+| write model_vs_capture_report.csv | planned | Legacy verifier CSV/report writers -> `rgbw_lut_builder/verify/reports.py` | n/a | `rgbw_lut_builder/verify/reports.py` exists as the target owner; source report writers are pinned in `docs/project_function_tree.md`. |
+| separate results by gamut, transfer, output family, topology, and Y bucket | planned | Current summary/report logic -> `rgbw_lut_builder/verify/{metrics,reports}.py` | n/a | The target owners exist; the remaining work is to propagate model/output metadata through those reporting layers. |
+| reuse existing verifier/pass-fail dictionary structure | planned | Existing dictionary ownership in `rgbw_lut_builder/correction/pass_fail_dictionary.py` -> reporting integration in `rgbw_lut_builder/verify/reports.py` | [Capture-cloud simplex correction](README_MATH_MODEL.md#12-capture-cloud-simplex-correction) | Existing dictionary ownership is in `rgbw_lut_builder/correction/pass_fail_dictionary.py`, but this phase has not wired it into model-vs-capture reporting yet. |
 
 ### Phase 5: virtual reference hull and response learning
 
-```text
-implement slightly-expanded virtual reference hull generation
-project/remap measured emitters into stored virtual emitter profiles
-separate solver geometry coordinates from physical output channel tuples
-add active-channel-family grouping to verifier reports
-aggregate pass/fail records into CorrectionResponseProfile artifacts
-fit simple ObservedResponseCurve summaries for W/no-W edge comparisons
-use learned response direction to bias correction candidates before live probing
-write diagnostics showing where virtual expansion helps, hurts, or remains uncertain
-```
+| Roadmap item | Status | Move target / source | Math / prototype | Pinned work |
+| --- | --- | --- | --- | --- |
+| implement slightly-expanded virtual reference hull generation | planned | Math-model prototype -> `rgbw_lut_builder/model/{projection,emitter_classification}.py` | [Profile-space virtual reference hull](README_MATH_MODEL.md#4-profile-space-virtual-reference-hull) | `rgbw_lut_builder/model/projection.py` and `rgbw_lut_builder/model/emitter_classification.py` exist as target anchors. |
+| project/remap measured emitters into stored virtual emitter profiles | planned | Math-model prototype -> `rgbw_lut_builder/model/projection.py` and `rgbw_lut_builder/response/multi_emitter_profile.py` | [Physical and virtual emitter records](README_MATH_MODEL.md#physical-and-virtual-emitter-records), [Solve using virtual geometry, expand through physical channels](README_MATH_MODEL.md#solve-using-virtual-geometry-expand-through-physical-channels) | Those target owners now exist as anchors; the function-level move map lives in `docs/project_function_tree.md`. |
+| separate solver geometry coordinates from physical output channel tuples | planned | Virtual-geometry/profile separation -> `rgbw_lut_builder/model/simplex.py` and `rgbw_lut_builder/response/multi_emitter_profile.py` | [Solve using virtual geometry, expand through physical channels](README_MATH_MODEL.md#solve-using-virtual-geometry-expand-through-physical-channels) | Those target owners now exist as anchors. |
+| add active-channel-family grouping to verifier reports | planned | Existing verifier feedback parsing/reporting -> `rgbw_lut_builder/verify/reports.py` | [Correction response profiles and observed response curves](README_MATH_MODEL.md#correction-response-profiles-and-observed-response-curves) | `rgbw_lut_builder/verify/reports.py` exists as the target owner; source feedback/report helpers are pinned in `docs/project_function_tree.md`. |
+| aggregate pass/fail records into CorrectionResponseProfile artifacts | planned | Existing feedback-bank/report surfaces -> `rgbw_lut_builder/response/multi_emitter_profile.py` and `rgbw_lut_builder/correction/residuals.py` | [Correction response profiles and observed response curves](README_MATH_MODEL.md#correction-response-profiles-and-observed-response-curves) | Those target owners exist; current aggregation candidates are pinned in `docs/project_function_tree.md`. |
+| fit simple ObservedResponseCurve summaries for W/no-W edge comparisons | planned | Existing feedback-bank surfaces -> `rgbw_lut_builder/correction/residuals.py` and `rgbw_lut_builder/response/multi_emitter_profile.py` | [Correction response profiles and observed response curves](README_MATH_MODEL.md#correction-response-profiles-and-observed-response-curves) | Those target owners exist; current summary candidates are pinned in `docs/project_function_tree.md`. |
+| use learned response direction to bias correction candidates before live probing | planned | Existing candidate-ranking and retry hints -> `rgbw_lut_builder/correction/{triangle_ranker,live_retry}.py` | [Capture-cloud simplex correction](README_MATH_MODEL.md#12-capture-cloud-simplex-correction) | `rgbw_lut_builder/correction/triangle_ranker.py` and `rgbw_lut_builder/correction/live_retry.py` exist as target owners; source hint-merging functions are pinned in `docs/project_function_tree.md`. |
+| write diagnostics showing where virtual expansion helps, hurts, or remains uncertain | planned | Existing analysis/report paths -> `rgbw_lut_builder/verify/{reports,metrics}.py` | [Why this helps edge colors](README_MATH_MODEL.md#why-this-helps-edge-colors) | `rgbw_lut_builder/verify/reports.py` and `rgbw_lut_builder/verify/metrics.py` exist as target owners; source diagnostics are pinned in `docs/project_function_tree.md`. |
 
 ### Phase 6: multi-emitter layered simplex support
 
-```text
-load emitter profiles with arbitrary channel counts
-classify emitters by measured chromaticity relative to the device hull
-build outer-hull triangle fans for each inner anchor
-solve RGBCCT-style warm/cool inner-anchor layers
-solve RGBY/RGBV-style outer-hull-expanded packages
-share known-point / simplex expansion logic with capture-cloud correction
-write diagnostics for hull classification, ambiguous edge emitters, and inner-anchor blends
-add degenerate inner-anchor line fallback for overdrive prediction models
-ensure strict sub-gamut mode continues to solve only direct legal edge/hull pairs
-```
+| Roadmap item | Status | Move target / source | Math / prototype | Pinned work |
+| --- | --- | --- | --- | --- |
+| load emitter profiles with arbitrary channel counts | planned | New emitter-profile loader -> `rgbw_lut_builder/response/multi_emitter_profile.py` and `rgbw_lut_builder/model/emitter_classification.py` | [Multi-emitter layered simplex model](README_MATH_MODEL.md#13-multi-emitter-layered-simplex-model) | Those target owners exist as anchors. |
+| classify emitters by measured chromaticity relative to the device hull | planned | New emitter classification logic -> `rgbw_lut_builder/model/emitter_classification.py` | [Emitter classification](README_MATH_MODEL.md#emitter-classification) | `rgbw_lut_builder/model/emitter_classification.py` exists as the target owner. |
+| build outer-hull triangle fans for each inner anchor | planned | Strict/simplex primitives plus new layered-simplex owner -> `rgbw_lut_builder/model/{layered_simplex,simplex}.py` | [General algorithm](README_MATH_MODEL.md#general-algorithm) | Those target owners exist; reusable strict/simplex source functions are pinned in `docs/project_function_tree.md`. |
+| solve RGBCCT-style warm/cool inner-anchor layers | planned | New layered-simplex owner -> `rgbw_lut_builder/model/layered_simplex.py` | [RGBCCT / warm-cool inner-anchor model](README_MATH_MODEL.md#rgbcct--warm-cool-inner-anchor-model) | `rgbw_lut_builder/model/layered_simplex.py` exists as the target owner. |
+| solve RGBY/RGBV-style outer-hull-expanded packages | planned | New layered-simplex owner -> `rgbw_lut_builder/model/layered_simplex.py` | [RGBY / RGBV / outer-hull expansion](README_MATH_MODEL.md#rgby--rgbv--outer-hull-expansion) | `rgbw_lut_builder/model/layered_simplex.py` exists as the target owner. |
+| share known-point / simplex expansion logic with capture-cloud correction | planned | Shared simplex ownership -> `rgbw_lut_builder/model/simplex.py` and `rgbw_lut_builder/correction/measured_simplex.py` | [Common simplex solve](README_MATH_MODEL.md#2-common-simplex-solve), [Capture-cloud simplex correction](README_MATH_MODEL.md#12-capture-cloud-simplex-correction) | Those target owners exist; reusable solve/candidate functions are pinned in `docs/project_function_tree.md`. |
+| write diagnostics for hull classification, ambiguous edge emitters, and inner-anchor blends | planned | New diagnostics/report owners -> `rgbw_lut_builder/verify/{reports,metrics}.py` | [Emitter classification](README_MATH_MODEL.md#emitter-classification) | Those target owners exist; later-phase diagnostic surfaces are pinned in `docs/project_function_tree.md`. |
+| add degenerate inner-anchor line fallback for overdrive prediction models | planned | New layered-simplex/simplex owner -> `rgbw_lut_builder/model/{layered_simplex,simplex}.py` | [Degenerate inner-anchor line fallback](README_MATH_MODEL.md#degenerate-inner-anchor-line-fallback) | Design is documented in the math model, and the package target owners already exist as anchors. |
+| ensure strict sub-gamut mode continues to solve only direct legal edge/hull pairs | planned | Guard strict topology in `rgbw_lut_builder/model/topology.py` while layered behavior lands in `rgbw_lut_builder/model/layered_simplex.py` | [Strict RGBW sub-gamut model](README_MATH_MODEL.md#6-strict-rgbw-sub-gamut-model) | `rgbw_lut_builder/model/topology.py` already owns strict topology behavior; the layered-simplex side is still planned. |
 
 ### Phase 7: offline correction field
 
-```text
-fit conservative residual correction maps
-build/rank local measured triangle/simplex candidates
-apply corrections to model candidates
-use pass/fail dictionary as final override/block
-write before/after diagnostics
-```
+| Roadmap item | Status | Move target / source | Math / prototype | Pinned work |
+| --- | --- | --- | --- | --- |
+| fit conservative residual correction maps | planned | Existing analysis/feedback surfaces -> `rgbw_lut_builder/correction/{correction_field,residuals}.py` | [Capture-cloud simplex correction](README_MATH_MODEL.md#12-capture-cloud-simplex-correction) | `rgbw_lut_builder/correction/correction_field.py` and `rgbw_lut_builder/correction/residuals.py` exist as target owners. |
+| build/rank local measured triangle/simplex candidates | planned | Existing capture-match/candidate helpers -> `rgbw_lut_builder/correction/{measured_simplex,triangle_ranker}.py` | [Common simplex solve](README_MATH_MODEL.md#2-common-simplex-solve), [Capture-cloud simplex correction](README_MATH_MODEL.md#12-capture-cloud-simplex-correction) | Those target owners exist; source candidate ranking helpers are pinned in `docs/project_function_tree.md`. |
+| apply corrections to model candidates | planned | Correction-field ownership plus offline builder integration -> `rgbw_lut_builder/correction/{correction_field,residuals}.py` and `rgbw_lut_builder/build/offline_measured.py` | [Capture-cloud simplex correction](README_MATH_MODEL.md#12-capture-cloud-simplex-correction) | Those target owners exist as anchors. |
+| use pass/fail dictionary as final override/block | planned | Existing dictionary ownership in `rgbw_lut_builder/correction/pass_fail_dictionary.py` -> correction-field integration in `rgbw_lut_builder/correction/correction_field.py` | [Correction response profiles and observed response curves](README_MATH_MODEL.md#correction-response-profiles-and-observed-response-curves) | Dictionary ownership exists in `rgbw_lut_builder/correction/pass_fail_dictionary.py`, but correction-field integration is not pinned yet. |
+| write before/after diagnostics | planned | New correction diagnostics/report owners -> `rgbw_lut_builder/verify/{reports,metrics}.py` | n/a | Those target owners exist as anchors; source report writers are pinned in `docs/project_function_tree.md`. |
 
 ### Phase 8: live UDP active calibration
 
-```text
-builder sends capture requests to host_calibration_gui
-receive full spotread measurement payloads
-update pass/fail dictionary during calibration
-retry candidate corrections until pass or retry budget exhausted
-save live_capture_session.jsonl and live_retry_trace.csv
-```
+| Roadmap item | Status | Move target / source | Math / prototype | Pinned work |
+| --- | --- | --- | --- | --- |
+| builder sends capture requests to host_calibration_gui | planned | Host GUI/live capture surfaces -> `rgbw_lut_builder/captures/udp_client.py` and `rgbw_lut_builder/build/live_measured.py` | n/a | Host-side protocol support exists, but builder-side active calibration wiring is not pinned yet. |
+| receive full spotread measurement payloads | planned | Spotread protocol parsing -> `rgbw_lut_builder/captures/spotread_protocol.py` and `rgbw_lut_builder/build/live_measured.py` | n/a | Host-side protocol support exists, but builder-side active calibration wiring is not pinned yet. |
+| update pass/fail dictionary during calibration | planned | Existing feedback-bank ownership -> `rgbw_lut_builder/correction/pass_fail_dictionary.py` plus live integration in `rgbw_lut_builder/correction/live_retry.py` | [Capture-cloud simplex correction](README_MATH_MODEL.md#12-capture-cloud-simplex-correction) | Dictionary ownership exists in `rgbw_lut_builder/correction/pass_fail_dictionary.py`, but live calibration integration is not pinned yet. |
+| retry candidate corrections until pass or retry budget exhausted | planned | Live retry/probe orchestration -> `rgbw_lut_builder/correction/live_retry.py` and `rgbw_lut_builder/build/live_measured.py` | [Capture-cloud simplex correction](README_MATH_MODEL.md#12-capture-cloud-simplex-correction) | Those target owners exist as anchors; retry/probe source surfaces are pinned in `docs/project_function_tree.md`. |
+| save live_capture_session.jsonl and live_retry_trace.csv | planned | Live session/report persistence -> `rgbw_lut_builder/build/live_measured.py` and `rgbw_lut_builder/verify/reports.py` | n/a | Those target owners exist as anchors. |
 
 ### Phase 9: output backend generalization
 
-```text
-RGB8 / RGB16
-RGBW8 / RGBW16
-generic channels16 outputs
-TemporalBFI encoder
-APA102 encoder
-HD108 encoder
-HyperHDR export
-C header export
-binary cube export
-coefficient tetrahedral cube export
-MCU/SBC size-report tooling for 8 / 16 / 32 MB PSRAM targets
-reference fixed-point tetrahedral samplers
-```
+| Roadmap item | Status | Move target / source | Math / prototype | Pinned work |
+| --- | --- | --- | --- | --- |
+| RGB8 / RGB16 | active | Current model-cube export -> `rgbw_lut_builder/output/{rgb8,rgb16}.py` | n/a | Package-owned model cube output currently writes RGB16 in `rgbw_lut_builder/build/model_only.py`; broader backend generalization is still pending. |
+| RGBW8 / RGBW16 | active | Current model-cube/header export -> `rgbw_lut_builder/output/{rgbw8,rgbw16}.py` | n/a | Package-owned model cube output currently writes RGBW16 in `rgbw_lut_builder/build/model_only.py`; broader backend generalization is still pending. |
+| generic channels16 outputs | planned | Shared cube/header logic -> `rgbw_lut_builder/output/channels16.py` | n/a | `rgbw_lut_builder/output/channels16.py` exists as the target owner. |
+| TemporalBFI encoder | planned | TemporalBFI conversion/export surfaces -> `rgbw_lut_builder/output/temporal_bfi_encoder.py` | n/a | `rgbw_lut_builder/output/temporal_bfi_encoder.py` exists as the target owner. |
+| APA102 encoder | planned | New chipset backend -> `rgbw_lut_builder/output/apa102_encoder.py` | n/a | `rgbw_lut_builder/output/apa102_encoder.py` exists as the target owner. |
+| HD108 encoder | planned | New chipset backend -> `rgbw_lut_builder/output/hd108_encoder.py` | n/a | `rgbw_lut_builder/output/hd108_encoder.py` exists as the target owner. |
+| HyperHDR export | planned | GUI/export surfaces -> `rgbw_lut_builder/output/hyperhdr_export.py` | n/a | `rgbw_lut_builder/output/hyperhdr_export.py` exists as the target owner. |
+| C header export | active | Shared header writers -> `rgbw_lut_builder/output/{c_header_export,mcu_header_export}.py` | n/a | Shared RGBW header writing exists in `rgbw_lut_builder/build/lut_writer.py`, but generalized output-backend ownership is still pending. |
+| binary cube export | active | Shared `.npy` export -> `rgbw_lut_builder/output/binary_cube_export.py` | n/a | Shared `.npy` cube writing exists in `rgbw_lut_builder/build/lut_writer.py`, but generalized output-backend ownership is still pending. |
+| coefficient tetrahedral cube export | planned | New coefficient exporter -> `rgbw_lut_builder/output/coefficient_cube_export.py` | [Tetrahedral LUT interpolation](README_MATH_MODEL.md#14-tetrahedral-lut-interpolation) | `rgbw_lut_builder/output/coefficient_cube_export.py` exists as the target owner. |
+| MCU/SBC size-report tooling for 8 / 16 / 32 MB PSRAM targets | planned | MCU/export sizing surfaces -> `rgbw_lut_builder/output/{mcu_header_export,coefficient_cube_export}.py` | n/a | Those target owners exist as anchors. |
+| reference fixed-point tetrahedral samplers | planned | Runtime sampler surfaces -> `rgbw_lut_builder/runtime/*` | [Tetrahedral LUT interpolation](README_MATH_MODEL.md#14-tetrahedral-lut-interpolation) | The runtime sampler reference files already exist as anchors under `rgbw_lut_builder/runtime/`. |
 
 ### Phase 10: adaptive capture planning
 
-```text
-use model confidence and correction uncertainty to choose new probes
-support sparse capture sets for normal users
-support dense research datasets for advanced calibration
-stop capturing once each region has enough support
-```
+| Roadmap item | Status | Move target / source | Math / prototype | Pinned work |
+| --- | --- | --- | --- | --- |
+| use model confidence and correction uncertainty to choose new probes | planned | Planner/report heuristics -> `tools/generate_capture_plan.py` and `rgbw_lut_builder/verify/metrics.py` | [Capture-cloud simplex correction](README_MATH_MODEL.md#12-capture-cloud-simplex-correction), [Correction response profiles and observed response curves](README_MATH_MODEL.md#correction-response-profiles-and-observed-response-curves) | `tools/generate_capture_plan.py` and `rgbw_lut_builder/verify/metrics.py` exist as target owners; candidate scoring functions are pinned in `docs/project_function_tree.md`. |
+| support sparse capture sets for normal users | planned | Planner policies -> `tools/generate_capture_plan.py` | n/a | `tools/generate_capture_plan.py` exists as the target owner. |
+| support dense research datasets for advanced calibration | planned | Planner plus TemporalBFI response surfaces -> `tools/generate_capture_plan.py` and `rgbw_lut_builder/response/temporal_bfi.py` | n/a | Those target owners exist as anchors. |
+| stop capturing once each region has enough support | planned | Planner stop conditions plus metrics -> `tools/generate_capture_plan.py` and `rgbw_lut_builder/verify/metrics.py` | [Capture-cloud simplex correction](README_MATH_MODEL.md#12-capture-cloud-simplex-correction) | Those target owners exist as anchors; candidate support/feedback functions are pinned in `docs/project_function_tree.md`. |
 
 ### Later exploration: physical-solution policy axis
 
@@ -1410,10 +1425,10 @@ GUI/display/export plumbing: mostly available, with standalone package imports/p
 capture loading and memory-aware build plumbing: available in legacy builder
 pass/fail verifier feedback dictionary: mostly available
 host GUI live capture protocol: available
-math-model LUT builder: available as model-only path
+math-model LUT builder: copied legacy path still available, with package-owned model APIs plus initial package-owned RGB16/RGBW16 cube build path now landed for phase 2
 WX radial / virtual-axis max-brightness / LP white-overdrive model family: available as functional experimental path
 multi-emitter layered simplex model: design documented, including degenerate inner-anchor line fallback, needs implementation
-RGB-only device model: needs explicit branch
+RGB-only device model: package API plus initial package-owned LUT-build integration now available
 ChannelResponseProvider abstraction: needs implementation
 TemporalBFI response backend: needs implementation
 measured correction field: needs implementation

@@ -25,6 +25,10 @@ from matplotlib.figure import Figure
 from matplotlib.patches import Polygon
 
 try:
+    from ..correction.pass_fail_dictionary import (
+        load_or_create_display_profile,
+        write_verifier_feedback_bank,
+    )
     from ..paths import DEFAULT_CONFIG_DIR, DEFAULT_GUI_CONFIG_PATH
     from .prototype_measured_white_solver import (
         DEFAULT_INPUT_DIR,
@@ -59,10 +63,12 @@ try:
         write_probe_debug_csv as write_delaunay_probe_debug_csv,
         write_utilization_csv as write_delaunay_utilization_csv,
         write_verifier_failure_dictionary,
-        write_verifier_feedback_bank,
-        load_or_create_display_profile,
     )
 except ImportError:
+    from rgbw_lut_builder.correction.pass_fail_dictionary import (
+        load_or_create_display_profile,
+        write_verifier_feedback_bank,
+    )
     from prototype_measured_white_solver import (
         DEFAULT_INPUT_DIR,
         MeasuredPriorDataset,
@@ -96,8 +102,6 @@ except ImportError:
         write_probe_debug_csv as write_delaunay_probe_debug_csv,
         write_utilization_csv as write_delaunay_utilization_csv,
         write_verifier_failure_dictionary,
-        write_verifier_feedback_bank,
-        load_or_create_display_profile,
     )
 
     _PROJECT_ROOT = Path(__file__).resolve().parents[2]

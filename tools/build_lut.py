@@ -10,6 +10,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
 	sys.path.insert(0, str(PROJECT_ROOT))
 
+from rgbw_lut_builder.build import model_only
 from rgbw_lut_builder.gui import analyze_rgbw_captures, build_delaunay_rgbw_lut, build_measured_rgbw_lut, rgbw_lut_gui
 
 
@@ -18,6 +19,7 @@ BUILD_SURFACES: dict[str, Callable[[], None]] = {
 	"measured": build_measured_rgbw_lut.main,
 	"delaunay": build_delaunay_rgbw_lut.main,
 	"analyze": analyze_rgbw_captures.main,
+	"model-only": model_only.main,
 }
 
 

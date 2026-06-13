@@ -4,8 +4,8 @@ __pycache__/
 .venv/
 venv/
 
-build/
-dist/
+/build/
+/dist/
 *.egg-info/
 
 config/gui/rgbw_lut_gui_config.json

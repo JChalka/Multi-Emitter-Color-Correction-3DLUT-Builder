@@ -16,6 +16,7 @@ dependencies = [
 
 [project.scripts]
 rgbw-lut-gui = "rgbw_lut_builder.gui.rgbw_lut_gui:main"
+rgbw-lut-model-only = "rgbw_lut_builder.build.model_only:main"
 rgbw-lut-build-measured = "rgbw_lut_builder.gui.build_measured_rgbw_lut:main"
 rgbw-lut-build-delaunay = "rgbw_lut_builder.gui.build_delaunay_rgbw_lut:main"
 rgbw-lut-analyze-captures = "rgbw_lut_builder.gui.analyze_rgbw_captures:main"
