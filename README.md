@@ -1,0 +1,345 @@
+# Multi-Emitter Color Correction 3DLUT Builder
+
+A model-guided, measurement-corrected LUT builder for mapping declared linear RGB input into calibrated LED output values.
+
+The project began as an RGBW capture-analysis and measured white-extraction toolkit, but the roadmap has expanded into a more general display-correction style pipeline for RGB, RGBW, TemporalBFI, and arbitrary multi-emitter LED packages.
+
+The core goal is:
+
+```text
+source RGB in a known gamut
+→ topology-aware device model
+→ measured/instrument-corrected emitter response
+→ capture-cloud correction and verifier feedback
+→ RGB / RGBW / channels16 / TemporalBFI output LUT
+```
+
+This repository is currently in transition. It contains the legacy/current RGBW capture-analysis builder, transitional sources, and the early standalone `rgbw_lut_builder` package structure. The detailed roadmap is the source of truth for what is already implemented, what has moved, and what remains planned.
+
+---
+
+## Documentation map
+
+Start here for orientation, then use the deeper docs when implementing or reviewing solver behavior.
+
+| Document | Purpose |
+| --- | --- |
+| [`README_ROADMAP.md`](README_ROADMAP.md) | Full project roadmap, implementation phases, migration plan, current status, and future builder direction. |
+| [`README_MATH_MODEL.md`](README_MATH_MODEL.md) | Detailed solve architecture for RGB, strict RGBW sub-gamut, WX / white-overdrive, capture-cloud correction, and multi-emitter layered simplex models. |
+| [`README_CIE_VIRTUAL_HULL_WHITE_CAPACITY_PROFILE_PREPROCESS.md`](README_CIE_VIRTUAL_HULL_WHITE_CAPACITY_PROFILE_PREPROCESS.md) | Future virtual-reference-hull / virtual-emitter profile preprocessing design. |
+| [`docs/project_function_tree.md`](docs/project_function_tree.md) | Generated lookup layer mapping roadmap items to current modules, legacy sources, and candidate functions. |
+
+---
+
+## Current repository state
+
+The current repository still carries forward the first-generation RGBW tooling:
+
+```text
+RGBW capture analysis
+measured-basis white extraction experiments
+interactive tkinter/matplotlib LUT GUI
+legacy Delaunay / measured cube utilities
+True16 calibration header export
+binary RGB/RGBW cube export
+verifier feedback/pass-fail plumbing
+transitional standalone package modules
+```
+
+The newer standalone package direction is already partially represented in `rgbw_lut_builder/`, but not every roadmap item has landed yet. The current roadmap tracker marks repository split / cleanup and the main RGB/RGBW model-unification work as the earliest completed phases, while response providers, display profiling, measured correction, virtual-reference hulls, multi-emitter layered simplex support, output backends, and live adaptive calibration continue as later phases.
+
+Use `docs/project_function_tree.md` when you need to answer questions like:
+
+```text
+which legacy function should move next?
+which module owns this roadmap item?
+which placeholder package is meant to receive this logic?
+```
+
+---
+
+## What this builder is trying to achieve
+
+The project is moving away from a narrowly scoped RGBW white-extraction LUT and toward a general measured color-correction system for LED emitters.
+
+The central design rule is:
+
+```text
+math model = physical/topological prediction axis
+patch captures = real-world correction field
+pass/fail dictionary = measured truth override
+local line/triangle/simplex solve = shared primitive for prediction and correction
+multi-emitter packages = layered simplex composition, not unconstrained N-channel solving
+```
+
+The math model should produce a sane initial LUT and define legal device topology. Measurements then correct the model for real hardware and setup behavior:
+
+```text
+LED package spectra
+wall / diffuser / optics response
+bench vs installed geometry
+channel response and low-end drift
+TemporalBFI behavior
+instrument bias
+verifier pass/fail evidence
+```
+
+The builder is intended to behave more like a display profiling and correction tool than a one-off RGBW heuristic.
+
+---
+
+## What is changing compared with the original builder
+
+The original builder family was centered around:
+
+```text
+measured RGBW captures
+bounded-error white extraction
+classic min(rgb) neutral bias
+measured family priors
+coarse cube solve
+upsampled dense LUT export
+```
+
+That workflow was useful, but it did not fully encode the things the project now needs:
+
+```text
+named source gamuts as first-class targets
+linear-light LED LUT contracts
+strict RGB/RGBW topology legality
+shared builder/verifier out-of-hull projection
+explicit strict vs WX / overdrive model families
+capture-cloud local simplex correction
+instrument-corrected measurement profiles
+arbitrary emitter packages and channel counts
+tetrahedral / coefficient-tetra runtime LUT targets
+```
+
+The new direction is:
+
+```text
+declared linear source gamut
+→ topology-aware model solve
+→ measured response provider
+→ instrument-corrected capture data
+→ local measured correction field
+→ pass/fail and response-learning override
+→ tetrahedral RGB/RGBW/channels LUT
+```
+
+---
+
+## Solver families
+
+### RGB-only
+
+RGB-only devices use a normal three-primary solve:
+
+```text
+linear RGB in selected source gamut
+→ project/map into measured device RGB triangle
+→ RGB output values
+```
+
+This is intended for ordinary RGB LED strips and RGB SPI devices such as APA102 or HD108 when no white diode is present.
+
+### Strict RGBW sub-gamut
+
+For RGBW packages, the W diode lives inside the RGB triangle and divides the physical hull into:
+
+```text
+RGW
+RBW
+BGW
+```
+
+Strict mode is the default correctness path. It only emits legal topology families:
+
+```text
+black
+R, G, B, W
+RG, RB, BG
+RW, GW, BW
+RGW, RBW, BGW
+```
+
+It intentionally avoids arbitrary four-channel RGBW output.
+
+### WX / white-overdrive
+
+WX modes are opt-in white-extraction / brightness-overdrive models. They allow higher W participation through constrained virtual-primary solves rather than unconstrained RGBW optimization.
+
+Current planned taxonomy:
+
+```text
+strict_subgamut              default topology-safe RGBW solve
+wx_radial_virtual            radial virtual-primary white-overdrive model
+wx_virtual_axis_maxbright    virtual-axis max-brightness / high-W model
+wx_lp_legacy                 direct LP max-white endpoint / reference model
+```
+
+These modes are especially relevant for ambilight / wallwash / HDR-style usage where higher W participation and higher brightness may be useful, as long as verifier data shows the residuals are predictable and correctable.
+
+### Multi-emitter layered simplex
+
+The roadmap extends beyond RGBW. Future profiles can describe packages such as:
+
+```text
+RGBCCT
+RGB + warm white + cool white
+RGBY / RGBV
+RGBY+W
+RGB+CCT+Y
+other arbitrary emitter sets
+```
+
+The key rule is that extra emitters change the point set and layer order. They should not force a free-form unconstrained N-channel optimizer. The model classifies emitters as outer, inner, or edge anchors, then solves through layered line/triangle/simplex composition.
+
+---
+
+## Display profiling and instrument correction
+
+The measured builder treats capture quality as part of the display profile.
+
+Earlier captures assumed a colorimeter-based workflow. The roadmap now includes an explicit instrument-correction layer so a spectrophotometer reference, such as an EFI ES-3000-class instrument, can be used to correct the faster colorimeter used for large capture sweeps.
+
+The intended separation is:
+
+```text
+instrument profile:
+    how the measurement device should be corrected
+
+display / emitter profile:
+    what the LED + wall/diffuser/optics setup emits
+
+correction field:
+    how measured display behavior deviates from the math model
+```
+
+The first implementation target is a paired spectro/colorimeter capture workflow that fits a 3×3 XYZ correction matrix:
+
+```text
+XYZ_reference ≈ M · XYZ_colorimeter
+```
+
+Raw and corrected measurements should both be preserved. Corrected XYZxyY should become the default data used by the builder/verifier when a valid correction profile is attached.
+
+---
+
+## Verification and correction direction
+
+The verifier and correction layers are meant to evolve from isolated pass/fail hints into a learned response model.
+
+Instead of only asking whether a single patch passed, the builder should learn:
+
+```text
+For this active channel family and drive trajectory,
+what chromaticity / luminance curve do we actually observe?
+```
+
+That allows the correction engine to reason about questions such as:
+
+```text
+Does adding W help this yellow/orange edge region?
+Does this blue or purple failure come from weak B, wall drift, or bad W introduction?
+Does a package behave differently at low Y than high Y?
+Does a warm/cool inner-anchor blend need a different layer split?
+```
+
+The correction ladder is intended to be:
+
+```text
+exact verifier pass
+→ measured local triangle/simplex correction
+→ measured edge/pair correction
+→ measured channel-ramp correction
+→ math model prediction
+→ hardcoded fallback
+```
+
+---
+
+## Interpolation and runtime targets
+
+Generated LUTs should be consumed with tetrahedral interpolation by default.
+
+Tetrahedral interpolation matters because trilinear interpolation blends all eight cell corners, which can synthesize illegal or unintended channel participation between individually legal RGBW/multi-emitter vertices.
+
+Planned runtime/storage forms:
+
+```text
+vertex_tetra:
+    store output values at cube vertices
+    lowest storage
+    more runtime math/fetches
+
+coefficient_tetra:
+    precompute per-cell tetrahedral affine coefficients
+    higher storage
+    faster MCU/SBC runtime path
+```
+
+Target hardware includes host/SBC consumers as well as MCU targets such as ESP32-S3, ESP32-P4, and Teensy 4.x where PSRAM size and lookup time matter.
+
+---
+
+## Current practical usage
+
+Use the current repository when you want to:
+
+```text
+analyze existing RGBW captures
+inspect white usage and measured chroma behavior
+run the current interactive RGBW LUT GUI
+build/export the existing coarse/dense LUTs
+generate True16 calibration headers
+generate binary RGB/RGBW cubes for device testing
+review migration targets for the standalone builder
+```
+
+Expect the standalone builder direction to be the better target when you need:
+
+```text
+strict gamut-aware RGB/RGBW output
+separate strict vs WX white-overdrive models
+Rec.709 / Rec.2020 / P3 / native linear-light behavior
+TV/display-primary-aware target gamuts
+instrument-corrected display profiles
+capture-cloud correction
+arbitrary emitter profiles
+RGBCCT / RGBY / RGBV / RGBY+W support
+tetrahedral coefficient runtime LUTs
+live adaptive calibration
+```
+
+---
+
+## Repository orientation
+
+Approximate current/future layout:
+
+```text
+rgbw_lut_builder/
+  model/          # RGB/RGBW/WX/simplex/topology/gamut logic
+  response/       # channel response providers and emitter profiles
+  captures/       # capture schemas/loaders/UDP/spotread protocol
+  correction/     # pass/fail dictionaries, residuals, measured simplex correction
+  verify/         # model-vs-capture metrics and reports
+  output/         # RGB/RGBW/channels/TemporalBFI/binary/coefficient exports
+  gui/            # GUI surfaces carried forward from current tooling
+  legacy/         # preserved reference/transition code
+
+tools/            # CLI entry points and utilities
+docs/             # generated function tree and implementation notes
+FILES_FOR_TRANSITION/  # legacy/transitional scripts used during migration
+```
+
+Some modules are already implemented, while others are intentionally placeholders for the roadmap phases. Check the roadmap and generated function tree before moving code so the implementation remains aligned with the planned ownership model.
+
+---
+
+## Development status
+
+This is an active research/buildout repository. The current code is useful, but the roadmap describes a broader architecture than the original hosted builder.
+
+No ETA is attached to the roadmap. The current focus is to preserve the working legacy/capture/export tools while moving the project toward a standalone measured LUT builder with explicit models, instrument-corrected profiles, richer verifier feedback, and scalable multi-emitter support.
