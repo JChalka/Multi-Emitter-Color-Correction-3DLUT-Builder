@@ -2,12 +2,13 @@
 
 A model-guided, measurement-corrected LUT builder for mapping linear RGB color into calibrated LED output values.
 
-This document is the **roadmap / integration README**. It explains the overall project direction, how the currently spread-out tools should be unified, and the phases needed to turn the current model-only experiments into a standalone measured RGB/RGBW/multi-emitter LUT builder.
+This document is the **roadmap / integration README**. It is intentionally focused on repository transition state, ownership, migration phases, and implementation sequencing rather than repeating every solver detail.
 
-For the actual solve equations and per-mode algorithms, see:
+Use the companion docs for deeper descriptions:
 
 ```text
-README_MATH_MODEL.md
+README.md             project overview and detailed feature framing
+README_MATH_MODEL.md  solve equations, algorithms, and policy examples
 ```
 
 ---
@@ -68,283 +69,61 @@ This separation prevents double-applying tone curves. The LED cube should normal
 
 ## Display profiling and instrument correction
 
-The measured builder should treat measurement accuracy as a first-class part of the display profile. The current workflow already assumes that LED / wall-wash / diffuser behavior is measured with a colorimeter through `spotread`, but earlier captures did not have a spectrophotometer-derived correction for that colorimeter. With an EFI ES-3000-class spectrophotometer available, the roadmap should add an instrument profiling layer before serious measured correction sessions.
+The roadmap should track the repository work needed to make measurement quality
+part of the display profile. The detailed instrument-correction design lives in
+`README.md`; this file only needs the implementation-oriented summary.
 
-Important distinction:
-
-```text
-emitter/display profile:
-    what the LED / wall / diffuser / optics system actually emits
-
-instrument profile:
-    how the measurement device should be corrected before the builder trusts it
-
-correction field:
-    how the measured display response deviates from the math model after
-    the measurement device itself has been corrected
-```
-
-The colorimeter should remain the primary high-speed capture instrument because it is faster and repeatable for large patch sweeps. The spectrophotometer becomes the slower reference instrument used to build a spectral or matrix correction for the exact LED/wall-wash setup.
-
-### Why this is needed
-
-RGBW and multi-emitter LED systems are not standard LCD/OLED spectra. The wall or diffuser further changes the effective spectrum seen by the instrument. A colorimeter without a matching spectral correction may produce stable but biased XYZxyY values.
-
-That bias can look like a solver failure:
+Target behavior:
 
 ```text
-blue primary xy is shifted
-white diode xy is shifted
-yellow/orange residuals appear worse than the optical system really is
-WX high-W regions appear artificially good or bad
-multi-emitter inner-anchor transitions are mis-ranked
+spectrophotometer reference when available
+→ Argyll CCXX / CCMX / CCSS correction artifact
+→ spotread -X correction during colorimeter capture
+→ raw + corrected XYZxyY stored in capture rows
+→ builder/verifier consume corrected measurements by default
 ```
 
-The builder should correct the measurement instrument first, then let the model/correction layers learn the real display response.
-
-### Correction artifacts
-
-Add an instrument/profile correction artifact separate from the LED response data:
+Keep these as separate artifacts:
 
 ```text
 InstrumentProfile:
-    instrument_id
-    instrument_type: colorimeter | spectrophotometer
-    model_name
-    serial_number when available
-    driver / Argyll identifier
-    spotread command / options
-    calibration timestamp
-    dark / black handling notes
-```
+    identifies the colorimeter / spectro and spotread options
 
-```text
-SpectralCorrectionProfile:
-    correction_id
-    reference_instrument_id          # spectrophotometer, e.g. EFI ES-3000
-    target_instrument_id             # colorimeter
-    display_profile_id
-    emitter_profile_id
-    geometry_id                      # bench / TV install / diffuser / wall distance
-    correction_type: argyll_ccmx | argyll_ccss | matrix | spectral | hybrid
-    argyll_ccxx_path when using Argyll CCXX artifacts
-    argyll_ccxx_kind: CCMX | CCSS when using Argyll CCXX artifacts
-    spotread_correction_arg: -X path/to/file.ccmx_or_ccss
-    raw_colorimeter_xyz
-    reference_spectro_xyz
-    correction_matrix_3x3 when used or decoded for diagnostics
-    spectral_sample / CCSS-style data when available
-    training_patch_set
-    validation_patch_set
-    holdout_error_stats
-    valid_luminance_range
-    valid_channel_families
-    created_at
-```
-
-The display profile should reference this artifact:
-
-```text
-DisplayProfile:
-    display_profile_id
-    emitter_profile_id
-    instrument_profile_id
-    spectral_correction_profile_id
-    geometry_id
-    reference_white_xy
-    measurement_units
-```
-
-### Preferred first implementation: Argyll CCXX / `ccxxmake`
-
-The first implementation should use ArgyllCMS correction artifacts directly where possible. The project already drives measurements through `spotread`, and `spotread` can apply Argyll correction files with `-X`, for example:
-
-```bash
-spotread -v -X my_matrix.ccmx
-spotread -v -X my_spectral.ccss
-```
-
-So instead of creating a custom correction-file format first, the builder should treat Argyll CCXX output as the preferred interchange format:
-
-```text
-spectrophotometer reference + colorimeter paired captures
-→ Argyll ccxxmake
-→ .ccmx matrix correction or .ccss spectral sample correction
-→ host GUI / live capture uses spotread -X correction_file
-→ corrected XYZxyY enters verifier/builder
-```
-
-Repository-owned metadata should wrap the Argyll artifact, not replace it:
-
-```text
 ArgyllCorrectionProfile:
-    correction_id
-    correction_file
-    correction_kind: ccmx | ccss
-    generated_by: ccxxmake
-    reference_instrument_id
-    target_instrument_id
-    display_profile_id
-    emitter_profile_id
-    geometry_id
-    training_patch_set
-    validation_patch_set
-    holdout_error_stats
-    spotread_command_template
-    spotread_correction_arg
+    wraps .ccmx / .ccss path, kind, source instruments, geometry, and validation
+
+DisplayProfile:
+    references emitter profile, instrument profile, correction profile,
+    geometry, reference white, and measurement policy
 ```
 
-This keeps the workflow compatible with existing color-management tools while still letting the builder track display geometry, validation quality, profile ids, and raw-vs-corrected measurement policy. Internal matrix fitting remains useful as a fallback/debug path, but Argyll `.ccmx` / `.ccss` should be the normal artifact type when available.
-
-### Fallback/internal implementation: paired spectro/colorimeter matrix correction
-
-If using Argyll `ccxxmake` directly is not practical, the simplest useful internal fallback is a paired-patch 3x3 XYZ correction matrix. This is also useful for diagnostics, validation summaries, and comparing builder-side correction behavior against an Argyll `.ccmx` result.
-
-Capture the same patch list with both instruments:
+Fallback/internal matrix correction can remain as a diagnostic path:
 
 ```text
-1. Render patch.
-2. Measure with spectrophotometer reference.
-3. Measure with colorimeter.
-4. Store both raw XYZxyY records.
-5. Fit a matrix M such that:
-
-   XYZ_reference ≈ M · XYZ_colorimeter
+XYZ_reference ≈ M · XYZ_colorimeter
 ```
 
-Solve the matrix with weighted least squares:
+Roadmap ownership:
 
 ```text
-M = argmin_M Σ w_i || XYZ_ref_i - M · XYZ_col_i ||²
+rgbw_lut_builder/response/
+    instrument and display/emitter profile records
+
+rgbw_lut_builder/captures/
+    raw/corrected XYZxyY capture schemas and spotread command integration
+
+rgbw_lut_builder/verify/
+    correction validation summaries and raw-vs-corrected report views
+
+host calibration GUI:
+    correction profile loading, spotread -X wiring, paired capture helpers,
+    and raw/corrected display toggles
 ```
 
-Useful weights:
-
-```text
-ignore or downweight near-black / noisy low-Y samples
-include pure R/G/B/W full-drive anchors
-include R/G/B/W ramps
-include neutral ramp
-include RG/RB/GB edges
-include RW/GW/BW boundaries
-include WX high-W probes
-include known difficult hues: yellow, orange, rose, blue, magenta
-hold out a validation subset that is not used for fitting
-```
-
-The correction should be validated before it is accepted:
-
-```text
-before/after mean dE
-before/after median dE
-P90 / P95 / max dE
-per-channel-family residuals
-neutral-axis residuals
-pure-primary residuals
-WX high-W residuals
-low-Y stability
-```
-
-A matrix correction is not as rich as a full spectral correction, but it is easy to implement and immediately useful. When Argyll CCXX is available, prefer `ccxxmake` for generating the `.ccmx` matrix correction and keep the internal fit as a cross-check/fallback. For spectral correction, prefer an Argyll `.ccss` path so `spotread -X` applies the correction before the builder receives XYZ.
-
-### Host GUI / capture workflow
-
-The host calibration GUI should preserve both raw and corrected readings:
-
-```text
-spotread raw result
-    ↓
-optional Argyll correction via spotread -X .ccmx/.ccss
-    ↓
-optional builder-side fallback matrix correction
-    ↓
-corrected XYZxyY used by verifier / builder
-```
-
-Never discard raw measurements. Every capture row should be able to store:
-
-```text
-X_raw, Y_raw, Z_raw, x_raw, y_raw
-X_corr, Y_corr, Z_corr, x_corr, y_corr
-instrument_id
-instrument_correction_id
-reference_instrument_id when paired
-correction_applied: true | false
-```
-
-The GUI should eventually support:
-
-```text
-load instrument correction profile
-load Argyll .ccmx / .ccss correction file
-apply correction through spotread -X during measurement
-capture paired spectro/colorimeter profile patches
-run or document ccxxmake generation
-fit fallback correction matrix when needed
-validate correction matrix / CCXX artifact
-toggle raw vs corrected display in verifier
-export correction profile JSON wrapper
-include correction metadata in verifier CSVs
-```
-
-The measured builder should default to corrected XYZ when a valid correction profile is attached, while still allowing raw-only sessions for bring-up or debugging.
-
-### Recommended workflow slot
-
-A full measured workflow should become:
-
-```text
-1. Define emitter/display geometry
-   LED package, wall/diffuser, distance, ambient constraints.
-
-2. Create or load instrument profile
-   colorimeter identity, spectro identity, spotread commands.
-
-3. Build spectral / matrix correction
-   paired spectro + colorimeter patch captures, preferably emitted as
-   an Argyll .ccmx or .ccss artifact through ccxxmake.
-
-4. Validate instrument correction
-   check holdout patches and per-family residuals.
-
-5. Measure strict sub_gamut baseline
-   diode basis, ramps, edges, neutral line.
-
-6. Build calibrated strict sub_gamut LUT / response profile.
-
-7. Build WX / overdrive models from calibrated baseline
-   radial, virtual-axis maxbright, LP reference.
-
-8. Verify WX / multi-emitter models
-   record pass/fail dictionary and response curves.
-
-9. Run optional capture-cloud correction
-   local simplex correction, response-learning, adaptive probes.
-
-10. Export LUT + metadata
-    include instrument correction ids and raw/corrected measurement policy.
-```
-
-This keeps the spectrophotometer work from becoming a mandatory bottleneck for every capture session. The expensive reference measurement is used to qualify the colorimeter, and the colorimeter then handles the dense capture work.
-
-### When to rebuild the correction
-
-The correction should be considered tied to the instrument and optical setup. Rebuild or revalidate it when any of these changes:
-
-```text
-new LED strip / diode package / emitter set
-wall, diffuser, lens, or reflection surface changes
-bench distance vs installed distance changes significantly
-colorimeter or spectro changes
-spotread mode or observer/measurement options change
-large thermal or aging drift is observed
-WX/maxbright mode reaches regions not covered by the correction training set
-multi-emitter package adds new spectral peaks
-```
-
-A quick validation subset can be run more often than a full correction build.
-
----
+Rebuild or revalidate the correction when the LED package, wall/diffuser,
+measurement geometry, instrument, spotread mode, or high-W/multi-emitter
+spectral content changes enough that the old correction may no longer describe
+the current setup.
 
 ## Current codebase status
 
@@ -431,280 +210,104 @@ fallback diode-basis measurement / DiodeProfile fetch path
 
 ## Solver families to unify
 
-The future builder should treat each output family as a profile-selected model, not as unrelated one-off programs.
+This roadmap should only summarize the model families and their migration
+ownership. The detailed solve equations, candidate lists, and policy examples
+belong in `README_MATH_MODEL.md`; the top-level `README.md` carries the higher
+level project explanation.
 
-### RGB-only LEDs
-
-RGB output is the simple three-primary model:
-
-```text
-linear RGB in selected source gamut
-    ↓
-project/map into measured device RGB triangle
-    ↓
-RGB output values
-```
-
-This is the correct mode for standard RGB LED strips and SPI chipsets such as APA102 or HD108 when no W diode is present.
-
-### RGBW strict sub-gamut
-
-For RGBW LEDs, W sits inside the RGB triangle and divides it into:
+Target solver family taxonomy:
 
 ```text
-RGW
-RBW
-BGW
-```
+rgb_only:
+    measured three-primary solve for RGB LED/SPI devices.
 
-The strict mode remains the default correctness path. Legal topologies are constrained to one physical sub-gamut or its edge/vertex reductions:
+strict_rgbw_subgamut:
+    default RGBW correctness path using only legal R/G/B/W, RGB edge,
+    W edge, and RGW/RBW/BGW families.
 
-```text
-black
-R, G, B, W
-RG, RB, BG
-RW, GW, BW
-RGW, RBW, BGW
-```
+wx_radial_virtual:
+    opt-in radial virtual-primary white-overdrive model.
 
-### WX / white-overdrive modes
-
-The WX family is a separate white-overdrive / white-extraction family. It should be explicit because it changes physical RGBW utilization.
-
-```text
-strict_subgamut              default topology-safe RGBW solve
-wx_radial_virtual            radial virtual-primary white-overdrive model
-wx_virtual_axis_maxbright    virtual-axis max-brightness / high-W model
-wx_lp_legacy                 direct LP max-white endpoint / reference model
-```
-
-Verifier results can promote a WX mode from experimental to a functional model family for a display profile when residuals are predictable and correctable. The pre-radial WX verification session was based on the virtual-axis max-brightness model, not the radial model, and already suggests that high-W regions can be stable while many failures are common wall/setup/capture residuals rather than topology failures. The old name `wx_legacy_virtual_axis` should be treated as a deprecated alias for `wx_virtual_axis_maxbright`, not as a diagnostic-only or obsolete mode.
-
-Recommended naming:
-
-```text
 wx_virtual_axis_maxbright:
-    first-class functional WX model
-    independently chooses high-W / high-Y virtual points per sub-gamut
-    can reach very high brightness on supported hardware
-    less geometrically constrained than wx_radial_virtual
+    opt-in high-W / high-Y virtual-axis max-brightness model.
 
-wx_legacy_virtual_axis:
-    deprecated compatibility alias only
-    should not be used in new metadata except to read old files/configs
+wx_lp_legacy:
+    LP max-white reference behavior; compatibility/reference mode.
+
+strict_multi_emitter_subgamut:
+    5+ emitter direct topology solve. Build legal lines/triangles/simplexes from
+    outer, edge, and inner emitters; choose one direct candidate at a time.
+
+multi_emitter_overdrive_layered_simplex:
+    opt-in virtual/layered solve. Solve inner-anchor or virtual layers first,
+    then solve/blend between those solved KnownPoints.
 ```
 
-### Multi-emitter solve families: strict sub-gamut vs overdrive
-
-Packages with more than four emitters should still avoid unconstrained
-N-channel optimization, but the roadmap needs two separate multi-emitter solve
-families:
+Strict 5+ emitter work should remain separate from overdrive work:
 
 ```text
-strict multi-emitter sub_gamut:
-    direct legal topology solve
-    evaluate one physical/virtual line/triangle/simplex at a time
-    include all legal direct candidates from the emitter topology
-    choose overlapping candidates by efficiency/residual/headroom/profile policy
+strict sub_gamut:
+    one legal direct simplex owns the output
+    examples: outer-edge+inner, outer+inner+inner, inner bridge lines
+    no solved-layer blending
 
-multi-emitter overdrive / layered simplex:
-    opt-in virtual prediction solve
-    solve inner-anchor or virtual layers first
-    solve/blend between those solved known points afterward
+overdrive / layered simplex:
+    generated or solved KnownPoints are allowed
+    blending between solved layers is explicit metadata
+    residuals are reported separately from strict topology residuals
 ```
 
-The earlier "multi-emitter layered simplex" description mostly described the
-overdrive family. Strict `sub_gamut` also applies to 5+ emitters and should be
-implemented as its own correctness path.
-
-Supported package examples remain:
-
-```text
-RGBCCT        RGB + cool white + warm white
-RGBWWCW       RGB + warm white + cool white
-RGBY          RGB + yellow / amber
-RGBV          RGB + violet
-RGBYW         RGB + yellow + white
-RGB+CCT+Y     RGB + cool/warm white + yellow or amber
-```
-
-Emitter classification is shared by both families:
-
-```text
-outer emitter:
-    expands or defines the measured device hull
-    becomes a hull vertex / sub-gamut-creating point
-
-inner emitter:
-    lives inside the measured hull
-    becomes a strict fan/bridge anchor or an overdrive inner-anchor layer
-
-edge emitter:
-    lies on or near an existing hull edge
-    treated as a hull refinement, edge anchor, or configurable ambiguous point
-```
-
-#### Strict 5+ emitter `sub_gamut`
-
-Strict mode should generalize RGBW sub-gamut rather than becoming a layered
-overdrive solve. With `N` outer hull emitters and `K` inner emitters, strict mode
-builds direct legal vertices, edges, and triangles from the topology:
-
-```text
-singles:
-    every outer, edge, and inner emitter
-
-duals:
-    adjacent outer hull edges
-    outer + inner lines
-    inner + inner lines
-    profile-allowed edge-refinement lines
-
-3-channel direct strict candidates:
-    outer edge + one inner
-    one outer + two inners
-    profile-allowed edge-refinement triangles
-    optional inner-only triangles when 3+ inner emitters form a valid simplex
-```
-
-For a CCT-style `RGB + CW + WW` profile, strict topology should include the full
-direct candidate set:
-
-```text
-Black
-
-Singles:
-    R, G, B, CW, WW
-
-Duals:
-    outer edges:       RG, RB, BG
-    outer + CW:        R+CW, G+CW, B+CW
-    outer + WW:        R+WW, G+WW, B+WW
-    inner bridge:      CW+WW
-
-3-channel direct strict candidates:
-    outer edge + CW:   RG+CW, RB+CW, BG+CW
-    outer edge + WW:   RG+WW, RB+WW, BG+WW
-    outer + CW + WW:   R+CW+WW, G+CW+WW, B+CW+WW
-```
-
-The `outer + CW + WW` bridge triangles are part of strict topology. They are not
-an overdrive blend as long as the solver chooses one direct simplex and solves
-that simplex directly.
-
-When direct strict candidates overlap, default selection should prioritize
-emitter/power efficiency, then residual, headroom, and measured evidence. Other
-profile policies can bias toward CCT, hue, a specific inner emitter, or temporal
-smoothness/hysteresis. This matters in ambiguous regions such as `RB` when there
-is no magenta-side inner emitter: policy may choose `RB+CW`, `RB+WW`,
-`R+CW+WW`, or `B+CW+WW` depending on efficiency and measured behavior.
-
-The roadmap should track these overlap policies explicitly:
+Shorthand strict-overlap policy list:
 
 ```text
 power_efficiency:
-    default policy; choose the valid direct simplex with the lowest estimated
-    current / power for the requested target Y.
+    default; lowest estimated current / highest Y per current.
 
 channel_resolution:
-    choose the valid direct simplex that preserves the best usable channel
-    granularity near the limiting/max channel while still solving chromaticity.
+    prefer candidates with better usable channel precision/headroom.
 
 y_preserving_split:
-    for split regions such as RBCW/RBWW, choose the decision boundary that keeps
-    solved Y / max-achievable Y similar across neighboring input values.
+    place ambiguous split boundaries where solved/max Y stays continuous.
+
+distance_inner_fit:
+    for ambiguous inner-emitter regions, compare target xy distance to the local
+    InnerA / InnerB / OuterA / OuterB neighborhood and select the direct
+    OuterA+OuterB+Inner simplex with the closer inner-anchor fit.
 
 virtual_inner_anchor:
-    optional constrained overdrive policy for missing hue-side inner anchors,
-    such as a magenta-side RB virtual anchor derived from CW+WW behavior.
+    constrained overdrive/virtual-primary policy for missing hue-side inner
+    anchors; requires balanced sibling virtual primaries, not one isolated point.
 ```
 
-`virtual_inner_anchor` must be treated as overdrive/virtual-primary behavior, not
-strict direct topology. If used, it should create a balanced sibling set of
-virtual primaries, not a single isolated high-Y RB virtual primary. For example,
-a profile that creates an RB/CW/WW virtual point should also define matching
-`RGCWWW` and `BGCWWW` sibling virtual points so one sub-gamut does not become
-brighter than the others simply because it received the only virtual primary.
-
-The strict path must not solve RGB+WW and RGB+CW and then blend those two solved
-outputs as a second stage. That second-stage solve is overdrive behavior.
-
-#### 5+ emitter overdrive / layered simplex
-
-Overdrive mode is where the current layered-simplex description belongs:
+Current transition targets:
 
 ```text
-RGBCCT overdrive:
-    solve RGB + warm-white as one inner-anchor model
-    solve RGB + cool-white as another inner-anchor model
-    treat both as KnownPoints
-    solve/blend between those solved outputs by CCT/Y/dE/profile policy
+rgbw_lut_builder/model/simplex.py
+    shared line/triangle/simplex solve and expansion primitive
 
-RGBY+W overdrive:
-    yellow expands the outer hull
-    white remains an inner anchor
-    build measured outer-hull fan against W
-    optionally create virtual/overdrive candidates before final correction
+rgbw_lut_builder/model/topology.py
+    legal candidate generation, strict-vs-overdrive guards, overlap policy owner
+
+rgbw_lut_builder/model/layered_simplex.py
+    explicit overdrive / virtual KnownPoint layer composition
+
+rgbw_lut_builder/model/emitter_classification.py
+    outer / inner / edge classification and ambiguous-edge handling
+
+rgbw_lut_builder/response/multi_emitter_profile.py
+    arbitrary channel-count emitter profiles, current/Y metadata, policy knobs
+
+rgbw_lut_builder/verify/reports.py
+    diagnostics for selected topology, overlap policy, tie-breaks, and residuals
 ```
 
-In other words:
+Implementation rule:
 
 ```text
-strict sub_gamut = solve one legal topology directly
-overdrive        = solve multiple virtual/legal topologies, then solve between results
+strict and overdrive outputs must not be mixed in the same feedback bucket;
+verifier reports and correction dictionaries must preserve model_family and
+active_channel_family metadata.
 ```
-
-This distinction should be reflected in CLI naming, metadata, verifier reports,
-and correction dictionaries so strict and overdrive residuals are not mixed.
-
-
-### Degenerate inner-anchor line fallback
-
-Multi-emitter overdrive models should also handle the rare case where additional
-inner emitters do **not** form a useful final inner-emitter triangle/simplex.
-This is unlikely in normal commercial packages, but it is a useful constraint for
-lab emitters, unusual CCT stacks, or future profiles where several inner anchors
-fall along a near-line.
-
-Rule:
-
-```text
-if inner anchors form a valid final triangle/simplex around the target:
-    solve them normally using the layered-simplex overdrive rule
-else:
-    reduce the inner-anchor chain through adjacent line solves
-```
-
-For a three-point inner line between two outer/hull references:
-
-```text
-OuterA --- Inner --- OuterB
-
-1. Solve between OuterA and Inner      → SolveOAI
-2. Solve between Inner and OuterB      → SolveIOB
-3. Solve between SolveOAI and SolveIOB → final virtual result
-```
-
-For a four-point line, use the same recursive reduction:
-
-```text
-OuterA --- InnerA --- InnerB --- OuterB
-
-1. Solve OuterA ↔ InnerA
-2. Solve InnerB ↔ OuterB
-3. Solve those two solved virtual points against each other
-```
-
-Longer line chains reduce the same way until they become a 3-line or 2-line
-problem already covered by the same rule.
-
-This fallback applies to **overdrive / virtual prediction models** where the
-builder is intentionally creating virtual inner-anchor results before the final
-solve. The strict sub-gamut model should remain strict: direct edge/hull lines
-are solved only between the actual legal emitter endpoints for that topology.
-
-
----
 
 ## Input gamuts and transfer handling
 
@@ -1832,14 +1435,15 @@ Use the roadmap rows below for task-level status and ownership, then use the fun
 | load emitter profiles with arbitrary channel counts | planned | New emitter-profile loader -> `rgbw_lut_builder/response/multi_emitter_profile.py` and `rgbw_lut_builder/model/emitter_classification.py` | [Multi-emitter sub-gamut and overdrive models](README_MATH_MODEL.md#13-multi-emitter-sub-gamut-and-overdrive-models) | Those target owners exist as anchors. |
 | classify emitters by measured chromaticity relative to the device hull | planned | New emitter classification logic -> `rgbw_lut_builder/model/emitter_classification.py` | [Emitter classification](README_MATH_MODEL.md#emitter-classification) | `rgbw_lut_builder/model/emitter_classification.py` exists as the target owner. |
 | build strict 5+ emitter sub_gamut candidate set | planned | Strict/simplex primitives plus new layered-simplex/topology owners -> `rgbw_lut_builder/model/{layered_simplex,simplex,topology}.py` | [Strict multi-emitter sub_gamut model](README_MATH_MODEL.md#131-strict-multi-emitter-sub_gamut-model) | Generate direct legal candidates including outer-edge+inner fans, outer+inner-pair bridge triangles, inner-inner lines, and overlap-policy ranking. |
-| implement strict-overlap policy selector | planned | Policy/ranking helpers -> `rgbw_lut_builder/model/topology.py`, `rgbw_lut_builder/model/simplex.py`, and verifier metadata -> `rgbw_lut_builder/verify/reports.py` | [Strict candidate overlap policy](README_MATH_MODEL.md#strict-candidate-overlap-policy) | Add selectable policies for power efficiency, channel resolution, Y-preserving split decisions, and user/profile hue/CCT bias. |
+| implement strict-overlap policy selector | planned | Policy/ranking helpers -> `rgbw_lut_builder/model/topology.py`, `rgbw_lut_builder/model/simplex.py`, and verifier metadata -> `rgbw_lut_builder/verify/reports.py` | [Strict candidate overlap policy](README_MATH_MODEL.md#strict-candidate-overlap-policy) | Add selectable policies for power efficiency, channel resolution, Y-preserving split decisions, distance-based inner-emitter fit, and user/profile hue/CCT bias. |
+| implement distance-based inner-emitter fit policy | planned | Ambiguous-region ranking helper -> `rgbw_lut_builder/model/topology.py` with diagnostics in `rgbw_lut_builder/verify/reports.py` | [Policy: distance-based inner-emitter fit](README_MATH_MODEL.md#policy-distance-based-inner-emitter-fit) | For an ambiguous outer edge with InnerA/InnerB alternatives, rank direct OuterA+OuterB+Inner candidates by normalized target-xy distance/projection residual, then use hysteresis/measured evidence/efficiency as tie-breaks. |
 | add constrained virtual-inner-anchor policy | planned | Virtual-primary/overdrive policy -> `rgbw_lut_builder/model/layered_simplex.py` and virtual profile metadata -> `rgbw_lut_builder/response/multi_emitter_profile.py` | [Policy: constrained virtual inner anchor](README_MATH_MODEL.md#policy-constrained-virtual-inner-anchor) | Treat missing-hue virtual anchors as constrained overdrive, not strict topology; require balanced sibling virtual primaries rather than a single isolated high-Y virtual point. |
 | solve RGBCCT-style warm/cool overdrive layers | planned | New layered-simplex owner -> `rgbw_lut_builder/model/layered_simplex.py` | [RGBCCT / warm-cool overdrive model](README_MATH_MODEL.md#rgbcct--warm-cool-overdrive-model) | `rgbw_lut_builder/model/layered_simplex.py` exists as the target owner. |
 | solve RGBY/RGBV-style outer-hull-expanded packages | planned | New layered-simplex owner -> `rgbw_lut_builder/model/layered_simplex.py` | [RGBY / RGBV / outer-hull expansion](README_MATH_MODEL.md#rgby--rgbv--outer-hull-expansion) | `rgbw_lut_builder/model/layered_simplex.py` exists as the target owner. |
 | share known-point / simplex expansion logic with capture-cloud correction | planned | Shared simplex ownership -> `rgbw_lut_builder/model/simplex.py` and `rgbw_lut_builder/correction/measured_simplex.py` | [Common simplex solve](README_MATH_MODEL.md#2-common-simplex-solve), [Capture-cloud simplex correction](README_MATH_MODEL.md#12-capture-cloud-simplex-correction) | Those target owners exist; reusable solve/candidate functions are pinned in `docs/project_function_tree.md`. |
 | write diagnostics for hull classification, overlap policy, ambiguous edge emitters, and inner-anchor blends | planned | New diagnostics/report owners -> `rgbw_lut_builder/verify/{reports,metrics}.py` | [Emitter classification](README_MATH_MODEL.md#emitter-classification) | Diagnostics should show which strict candidates overlapped, which policy selected the output, and where overdrive layers differ from strict direct topology. |
 | add degenerate inner-anchor line fallback for overdrive prediction models | planned | New layered-simplex/simplex owner -> `rgbw_lut_builder/model/{layered_simplex,simplex}.py` | [Degenerate inner-anchor line fallback](README_MATH_MODEL.md#degenerate-inner-anchor-line-fallback) | Design is documented in the math model, and the package target owners already exist as anchors. |
-| implement strict 5+ emitter overlap policy | planned | Guard strict topology in `rgbw_lut_builder/model/topology.py` while direct multi-emitter fan/bridge selection lands in `rgbw_lut_builder/model/layered_simplex.py` / `simplex.py` | [Strict multi-emitter sub_gamut model](README_MATH_MODEL.md#131-strict-multi-emitter-sub_gamut-model) | Default should prioritize emitter/power efficiency, then residual, headroom, measured pass/fail, and hysteresis/user profile policy. |
+| preserve strict-vs-overdrive policy metadata | planned | Guard strict topology in `rgbw_lut_builder/model/topology.py` while direct multi-emitter fan/bridge selection lands in `rgbw_lut_builder/model/layered_simplex.py` / `simplex.py` | [Strict multi-emitter sub_gamut model](README_MATH_MODEL.md#131-strict-multi-emitter-sub_gamut-model) | Store chosen overlap policy, tie-break source, active channel family, and strict/overdrive model family so correction data is not mixed. |
 
 ### Phase 7: offline correction field
 

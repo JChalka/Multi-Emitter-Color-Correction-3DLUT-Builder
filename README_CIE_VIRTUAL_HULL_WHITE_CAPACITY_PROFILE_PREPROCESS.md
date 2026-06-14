@@ -474,6 +474,11 @@ y_preserving_split:
     RB+CW versus RB+WW, so one side of a small overlap does not become
     unintentionally brighter.
 
+distance_inner_fit:
+    in ambiguous inner-anchor regions, compare the target xy against the local
+    InnerA / InnerB / OuterA / OuterB neighborhood and select the direct
+    OuterA+OuterB+Inner simplex whose inner-anchor fit is closest.
+
 virtual_inner_anchor:
     optional constrained overdrive policy that creates a missing hue-side
     virtual inner anchor, for example an RB-side magenta-like bridge derived

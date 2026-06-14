@@ -1289,6 +1289,104 @@ This does not mean strict mode should blend two solved layers. It means the
 strict selection policy should account for Y continuity when it chooses which
 single direct simplex owns an overlap region.
 
+##### Policy: distance-based inner-emitter fit
+
+Distance-based inner-emitter fit is a strict overlap policy for ambiguous
+5+ emitter regions where the same outer edge can be paired with more than one
+inner emitter.
+
+The motivating shape is an outer edge with two plausible inner anchors:
+
+```text
+OuterA -------- OuterB
+   \            /
+    \          /
+     InnerA  InnerB
+```
+
+Candidate strict simplexes may include:
+
+```text
+S_A = OuterA + OuterB + InnerA
+S_B = OuterA + OuterB + InnerB
+```
+
+If only one candidate contains the target xy, strict containment selects it. The
+distance policy applies when both candidates are valid, both are near-valid, or
+profile geometry/capture data marks the region as ambiguous.
+
+For a target chromaticity `T`, compute xy distances to the local four-point
+neighborhood:
+
+```math
+d_{OA} = \lVert T - O_A \rVert
+```
+
+```math
+d_{OB} = \lVert T - O_B \rVert
+```
+
+```math
+d_{IA} = \lVert T - I_A \rVert
+```
+
+```math
+d_{IB} = \lVert T - I_B \rVert
+```
+
+The outer distances are shared by both candidate triangles, so they mostly
+provide local scale and endpoint context. The inner distances decide which inner
+anchor better fits the target in the ambiguous band.
+
+A simple first score is:
+
+```text
+edge_scale = max(distance(OuterA, OuterB), epsilon)
+inner_scale_A = max(distance(InnerA, OuterA), distance(InnerA, OuterB), epsilon)
+inner_scale_B = max(distance(InnerB, OuterA), distance(InnerB, OuterB), epsilon)
+
+score_A = distance(T, InnerA) / inner_scale_A
+score_B = distance(T, InnerB) / inner_scale_B
+```
+
+A slightly richer score can include the triangle projection residual so that
+near-boundary candidates remain stable when neither simplex contains the target
+cleanly:
+
+```text
+score_A = w_inner * normalized_distance(T, InnerA)
+        + w_resid * distance(T, project_to_triangle(T, OuterA, OuterB, InnerA)) / edge_scale
+
+score_B = w_inner * normalized_distance(T, InnerB)
+        + w_resid * distance(T, project_to_triangle(T, OuterA, OuterB, InnerB)) / edge_scale
+```
+
+Then choose:
+
+```text
+if score_A + tie_epsilon < score_B:
+    choose OuterA + OuterB + InnerA
+elif score_B + tie_epsilon < score_A:
+    choose OuterA + OuterB + InnerB
+else:
+    apply the configured tie-break policy
+```
+
+Useful tie-break order:
+
+```text
+1. previous/hysteresis owner, if this is a neighboring LUT node or temporal path
+2. measured pass/fail or response-curve evidence for the active family
+3. power_efficiency
+4. channel_resolution
+5. deterministic profile order
+```
+
+This lowers ambiguity for inner-emitter split regions without silently becoming
+overdrive. The solver still selects one direct strict simplex and solves that
+simplex directly. It does not solve both inner-anchor layers and blend the
+outputs afterward.
+
 ##### Policy: constrained virtual inner anchor
 
 A missing hue-side inner emitter can leave an awkward strict overlap decision.
@@ -1359,11 +1457,13 @@ WW close to yellow/red:
 
 No magenta-side inner emitter:
     RB-side targets may be ambiguous. Power policy might choose the lowest
-    current of RB+CW, RB+WW, R+CW+WW, or B+CW+WW. Channel-resolution policy might
-    choose the candidate with better active-channel precision. Y-preserving
-    policy might move the split boundary so the two sides have similar Y.
-    Virtual-inner-anchor policy might create a constrained RB-side virtual
-    anchor, but only alongside balanced RG/BG sibling virtual primaries.
+    current of RB+CW, RB+WW, R+CW+WW, or B+CW+WW. Distance-based
+    inner-emitter fit might choose the inner anchor whose OuterA+OuterB+Inner
+    triangle is closer to the target xy in the local four-point neighborhood.
+    Channel-resolution policy might choose the candidate with better active-channel
+    precision. Y-preserving policy might move the split boundary so the two sides
+    have similar Y. Virtual-inner-anchor policy might create a constrained RB-side
+    virtual anchor, but only alongside balanced RG/BG sibling virtual primaries.
 ```
 
 #### Strict algorithm
@@ -1400,6 +1500,7 @@ function solve_strict_multi_emitter(source_rgb, emitter_profile, strict_policy):
     best = rank_strict_candidates(candidates,
                                   residual,
                                   efficiency,
+                                  distance_inner_fit,
                                   headroom,
                                   pass_fail_dictionary,
                                   smoothness_hysteresis,

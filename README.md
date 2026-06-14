@@ -259,12 +259,25 @@ y_preserving_split:
     across neighboring input values, so one side of the split does not become
     unintentionally brighter than the other.
 
+distance_inner_fit:
+    for an ambiguous outer-edge region with two possible inner anchors, compare
+    the target xy distance to InnerA, InnerB, OuterA, and OuterB. Choose the
+    direct OuterA+OuterB+Inner candidate whose inner-anchor fit is closer to the
+    target xy, then fall through to hysteresis, measured evidence, efficiency,
+    or deterministic profile order when the two fits are effectively tied.
+
 virtual_inner_anchor:
     optionally create a constrained virtual inner anchor for a missing hue-side
     region, such as a magenta-side RB bridge built from CW+WW behavior. This is
     technically overdrive, not strict sub_gamut, but it can be exposed as a
     controlled virtual-gamut/virtual-primary policy.
 ```
+
+Distance-based inner fit remains a strict policy: it only decides which one
+legal direct simplex owns the ambiguous region. It does not solve both inner
+anchors and blend the results. Borders can still tie, so the profile should
+record a deterministic tie-break policy and the verifier should report where
+that tie-break was used.
 
 For the virtual-inner-anchor policy, the virtual point should not be introduced
 alone. A single RB-side virtual primary can make that sub-gamut brighter than the
