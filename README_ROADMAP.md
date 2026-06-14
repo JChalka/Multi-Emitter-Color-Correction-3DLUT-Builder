@@ -126,10 +126,13 @@ SpectralCorrectionProfile:
     display_profile_id
     emitter_profile_id
     geometry_id                      # bench / TV install / diffuser / wall distance
-    correction_type: spectral | matrix | hybrid
+    correction_type: argyll_ccmx | argyll_ccss | matrix | spectral | hybrid
+    argyll_ccxx_path when using Argyll CCXX artifacts
+    argyll_ccxx_kind: CCMX | CCSS when using Argyll CCXX artifacts
+    spotread_correction_arg: -X path/to/file.ccmx_or_ccss
     raw_colorimeter_xyz
     reference_spectro_xyz
-    correction_matrix_3x3 when used
+    correction_matrix_3x3 when used or decoded for diagnostics
     spectral_sample / CCSS-style data when available
     training_patch_set
     validation_patch_set
@@ -152,9 +155,50 @@ DisplayProfile:
     measurement_units
 ```
 
-### First implementation: paired spectro/colorimeter matrix correction
+### Preferred first implementation: Argyll CCXX / `ccxxmake`
 
-The simplest useful implementation is a paired-patch 3x3 XYZ correction matrix.
+The first implementation should use ArgyllCMS correction artifacts directly where possible. The project already drives measurements through `spotread`, and `spotread` can apply Argyll correction files with `-X`, for example:
+
+```bash
+spotread -v -X my_matrix.ccmx
+spotread -v -X my_spectral.ccss
+```
+
+So instead of creating a custom correction-file format first, the builder should treat Argyll CCXX output as the preferred interchange format:
+
+```text
+spectrophotometer reference + colorimeter paired captures
+→ Argyll ccxxmake
+→ .ccmx matrix correction or .ccss spectral sample correction
+→ host GUI / live capture uses spotread -X correction_file
+→ corrected XYZxyY enters verifier/builder
+```
+
+Repository-owned metadata should wrap the Argyll artifact, not replace it:
+
+```text
+ArgyllCorrectionProfile:
+    correction_id
+    correction_file
+    correction_kind: ccmx | ccss
+    generated_by: ccxxmake
+    reference_instrument_id
+    target_instrument_id
+    display_profile_id
+    emitter_profile_id
+    geometry_id
+    training_patch_set
+    validation_patch_set
+    holdout_error_stats
+    spotread_command_template
+    spotread_correction_arg
+```
+
+This keeps the workflow compatible with existing color-management tools while still letting the builder track display geometry, validation quality, profile ids, and raw-vs-corrected measurement policy. Internal matrix fitting remains useful as a fallback/debug path, but Argyll `.ccmx` / `.ccss` should be the normal artifact type when available.
+
+### Fallback/internal implementation: paired spectro/colorimeter matrix correction
+
+If using Argyll `ccxxmake` directly is not practical, the simplest useful internal fallback is a paired-patch 3x3 XYZ correction matrix. This is also useful for diagnostics, validation summaries, and comparing builder-side correction behavior against an Argyll `.ccmx` result.
 
 Capture the same patch list with both instruments:
 
@@ -201,7 +245,7 @@ WX high-W residuals
 low-Y stability
 ```
 
-A matrix correction is not as rich as a full spectral correction, but it is easy to implement and immediately useful. Later, if the tooling supports it cleanly, add a spectral sample / CCSS-style path and let the colorimeter apply the spectral correction directly before the builder receives XYZ.
+A matrix correction is not as rich as a full spectral correction, but it is easy to implement and immediately useful. When Argyll CCXX is available, prefer `ccxxmake` for generating the `.ccmx` matrix correction and keep the internal fit as a cross-check/fallback. For spectral correction, prefer an Argyll `.ccss` path so `spotread -X` applies the correction before the builder receives XYZ.
 
 ### Host GUI / capture workflow
 
@@ -210,7 +254,9 @@ The host calibration GUI should preserve both raw and corrected readings:
 ```text
 spotread raw result
     ↓
-optional instrument correction
+optional Argyll correction via spotread -X .ccmx/.ccss
+    ↓
+optional builder-side fallback matrix correction
     ↓
 corrected XYZxyY used by verifier / builder
 ```
@@ -230,11 +276,14 @@ The GUI should eventually support:
 
 ```text
 load instrument correction profile
+load Argyll .ccmx / .ccss correction file
+apply correction through spotread -X during measurement
 capture paired spectro/colorimeter profile patches
-fit correction matrix
-validate correction matrix
+run or document ccxxmake generation
+fit fallback correction matrix when needed
+validate correction matrix / CCXX artifact
 toggle raw vs corrected display in verifier
-export correction profile JSON
+export correction profile JSON wrapper
 include correction metadata in verifier CSVs
 ```
 
@@ -252,7 +301,8 @@ A full measured workflow should become:
    colorimeter identity, spectro identity, spotread commands.
 
 3. Build spectral / matrix correction
-   paired spectro + colorimeter patch captures.
+   paired spectro + colorimeter patch captures, preferably emitted as
+   an Argyll .ccmx or .ccss artifact through ccxxmake.
 
 4. Validate instrument correction
    check holdout patches and per-family residuals.
@@ -775,9 +825,10 @@ Before large LED-response captures, the builder should be able to run a small pa
 ```text
 spectrophotometer reference patches
 colorimeter matched patches
-matrix/spectral correction fit
+Argyll ccxxmake CCMX/CCSS generation
+optional internal matrix/spectral correction fit
 holdout validation
-instrument correction profile export
+instrument correction profile JSON wrapper export
 ```
 
 Recommended first paired patch set:
@@ -1118,6 +1169,13 @@ LCh:   spotread -h -O
 Luv:   spotread -u -O
 ```
 
+When an Argyll correction artifact is attached, the GUI/capture client should add the correction file with `-X`:
+
+```bash
+spotread -x -O -X profiles/instrument_corrections/wallwash.ccmx
+spotread -x -O -X profiles/instrument_corrections/wallwash.ccss
+```
+
 `XYZxy` should remain the default because XYZxyY is the main model and verifier data family.
 
 ---
@@ -1270,6 +1328,7 @@ rgbw_lut_builder/
 
     profiling/
       instruments.py
+      argyll_ccxx.py
       spectral_correction.py
       matrix_correction.py
       paired_capture.py
@@ -1327,6 +1386,7 @@ rgbw_lut_builder/
     build_lut.py
     verify_lut.py
     profile_instrument.py
+    make_argyll_ccxx.py
     validate_instrument_profile.py
     run_live_capture.py
     convert_temporal_bfi_dataset.py
@@ -1370,6 +1430,7 @@ replace Delaunay as default solver with math-model measured builder
 split RGB-only and RGBW topology models cleanly
 replace hardcoded ramp arrays with response providers
 add display/instrument profiling and spectro-derived colorimeter correction artifacts
+prefer Argyll ccxxmake-generated CCMX/CCSS artifacts before introducing custom correction formats
 make pass/fail dictionary first-class
 add WX mode taxonomy: strict_subgamut, wx_radial_virtual, wx_virtual_axis_maxbright, wx_lp_legacy
 add emitter classification for inner / outer / edge emitters
@@ -1483,7 +1544,7 @@ rgbw-lut-build \
   --interpolation tetrahedral
 ```
 
-Instrument correction profile from paired spectro/colorimeter captures:
+Instrument correction profile from paired spectro/colorimeter captures, preferring Argyll CCXX output:
 
 ```bash
 rgbw-lut-profile-instrument \
@@ -1491,9 +1552,16 @@ rgbw-lut-profile-instrument \
   --reference-instrument efi-es-3000 \
   --target-instrument colorimeter-primary \
   --capture-plan plans/instrument_profile_rgbw_sparse.csv \
-  --correction-type matrix3x3 \
+  --correction-type argyll-ccmx \
+  --ccxxmake \
   --holdout-ratio 0.25 \
   --output profiles/instrument_corrections/tv_wallwash_es3000_to_colorimeter.json
+```
+
+Example corrected `spotread` invocation recorded by that profile:
+
+```bash
+spotread -v -x -O -X profiles/instrument_corrections/tv_wallwash.ccmx
 ```
 
 Measured RGBW build using an instrument correction profile:
@@ -1506,6 +1574,7 @@ rgbw-lut-build \
   --input-transfer linear \
   --display-profile profiles/wallwash_tv.json \
   --instrument-correction profiles/instrument_corrections/tv_wallwash_es3000_to_colorimeter.json \
+  --spotread-correction profiles/instrument_corrections/tv_wallwash.ccmx \
   --rgbw-mode wx_virtual_axis_maxbright \
   --cube-size 256 \
   --interpolation tetrahedral
@@ -1604,8 +1673,9 @@ Use the roadmap rows below for task-level status and ownership, then use the fun
 | --- | --- | --- | --- | --- |
 | add instrument/display profile schema | planned | New profile artifacts -> `rgbw_lut_builder/profiling/instruments.py` and `rgbw_lut_builder/profiling/display_profile.py` | [Display profiling and instrument correction](#display-profiling-and-instrument-correction) | Target modules should record colorimeter, spectro, geometry, raw/corrected measurement policy, and correction ids. |
 | implement paired spectro/colorimeter capture workflow | planned | Host calibration GUI + UDP capture protocol + `tools/profile_instrument.py` -> `rgbw_lut_builder/profiling/paired_capture.py` | [Display profiling and instrument correction](#display-profiling-and-instrument-correction) | First version should render the same sparse RGBW/WX patch plan for the spectrophotometer and colorimeter and store paired raw XYZxyY. |
-| fit 3x3 XYZ correction matrix | planned | New correction fitter -> `rgbw_lut_builder/profiling/matrix_correction.py` | [Display profiling and instrument correction](#first-implementation-paired-spectrocolorimeter-matrix-correction) | Fit `XYZ_reference ≈ M · XYZ_colorimeter`, with low-Y/outlier handling and a holdout validation report. |
-| support spectral / CCSS-style correction metadata | planned | Future spectral artifact loader/exporter -> `rgbw_lut_builder/profiling/spectral_correction.py` | [Display profiling and instrument correction](#correction-artifacts) | Keep this optional after matrix correction; metadata should allow a later spectro-derived spectral sample path without changing capture schemas. |
+| integrate Argyll `ccxxmake` / CCXX artifacts | planned | Argyll wrapper + profile metadata -> `rgbw_lut_builder/profiling/argyll_ccxx.py`, `tools/make_argyll_ccxx.py`, and host GUI spotread command handling | [Preferred first implementation: Argyll CCXX / `ccxxmake`](#preferred-first-implementation-argyll-ccxx--ccxxmake) | Prefer `.ccmx` / `.ccss` output and feed it back into measurements via `spotread -X`; repo JSON should wrap the Argyll artifact with ids, geometry, validation, and raw/corrected policy. |
+| fit 3x3 XYZ correction matrix | planned | New correction fitter -> `rgbw_lut_builder/profiling/matrix_correction.py` | [Display profiling and instrument correction](#fallbackinternal-implementation-paired-spectrocolorimeter-matrix-correction) | Keep this as fallback/debug/cross-check against Argyll `.ccmx`; fit `XYZ_reference ≈ M · XYZ_colorimeter`, with low-Y/outlier handling and a holdout validation report. |
+| support spectral / CCSS-style correction metadata | planned | Future spectral artifact loader/exporter -> `rgbw_lut_builder/profiling/spectral_correction.py` | [Display profiling and instrument correction](#correction-artifacts) | Prefer Argyll `.ccss` when available; metadata should allow spectro-derived spectral sample corrections without changing capture schemas. |
 | apply instrument correction in capture loaders | planned | Capture loaders and response providers -> `rgbw_lut_builder/captures/loaders.py`, `rgbw_lut_builder/response/*` | [Display profiling and instrument correction](#host-gui--capture-workflow) | Raw XYZxyY must be preserved; corrected XYZxyY becomes the default measurement used by builder/verifier when a valid correction profile is attached. |
 | add verifier raw-vs-corrected diagnostics | planned | Verifier/report surfaces -> `rgbw_lut_builder/verify/reports.py` and host calibration GUI verifier | [Display profiling and instrument correction](#host-gui--capture-workflow) | Reports should show whether correction was applied and allow before/after error summaries for the correction profile. |
 

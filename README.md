@@ -216,7 +216,26 @@ correction field:
     how measured display behavior deviates from the math model
 ```
 
-The first implementation target is a paired spectro/colorimeter capture workflow that fits a 3×3 XYZ correction matrix:
+The first implementation target should lean on the existing ArgyllCMS correction workflow rather than inventing a repo-specific correction format first. Argyll `ccxxmake` can generate both matrix corrections (`.ccmx`) and spectral sample corrections (`.ccss`), and `spotread` can already consume those correction files directly:
+
+```bash
+spotread -v -X my_matrix.ccmx
+spotread -v -X my_spectral.ccss
+```
+
+That means the builder can treat Argyll CCXX artifacts as the canonical first implementation path:
+
+```text
+paired spectro/colorimeter captures
+→ ccxxmake-generated CCMX or CCSS
+→ spotread -X correction during future captures
+→ raw + corrected XYZxyY stored in capture/verifier data
+→ builder consumes corrected measurements by default
+```
+
+Repo-side instrument profiles should therefore record the Argyll correction artifact path/type, validation stats, instrument ids, display geometry, and raw/corrected measurement policy. A small native JSON wrapper can reference or copy the `.ccmx` / `.ccss` file and store builder-specific metadata without replacing the Argyll format.
+
+A fallback internal 3×3 representation can still exist for diagnostics or environments where applying `spotread -X` is not practical:
 
 ```text
 XYZ_reference ≈ M · XYZ_colorimeter
@@ -294,6 +313,7 @@ run the current interactive RGBW LUT GUI
 build/export the existing coarse/dense LUTs
 generate True16 calibration headers
 generate binary RGB/RGBW cubes for device testing
+track Argyll CCXX / CCMX / CCSS instrument-correction metadata
 review migration targets for the standalone builder
 ```
 
@@ -305,6 +325,7 @@ separate strict vs WX white-overdrive models
 Rec.709 / Rec.2020 / P3 / native linear-light behavior
 TV/display-primary-aware target gamuts
 instrument-corrected display profiles
+Argyll CCXX / CCMX / CCSS colorimeter correction through spotread -X
 capture-cloud correction
 arbitrary emitter profiles
 RGBCCT / RGBY / RGBV / RGBY+W support
