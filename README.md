@@ -193,26 +193,57 @@ RGB+CCT+Y
 other arbitrary emitter sets
 ```
 
-The multi-emitter model has two distinct paths:
+For 5+ emitter packages, the important split is:
 
 ```text
 strict multi-emitter sub_gamut:
-    classify outer / inner / edge emitters
-    build the legal hull or triangle fan
-    solve one containing direct line/triangle/simplex
-    preserve topology legality like RGBW strict sub_gamut
+    direct legal topology solve
+    build the legal hull / fan / bridge topology from measured emitters
+    choose one containing line/triangle/simplex at a time
+    rank overlaps by efficiency, residual, headroom, and profile policy
+    do not solve multiple inner-anchor layers and then blend them
 
 multi-emitter overdrive / layered simplex:
+    opt-in virtual prediction model
     solve one or more inner-anchor or virtual layers first
     treat those solved layers as known points
     solve/blend between those known points for brightness, CCT, or measured-dE policy
 ```
 
-For example, an RGBCCT strict solve may choose a direct RGB+WW or RGB+CW fan
-triangle. The RGBCCT overdrive solve is the mode that solves both warm-white and
-cool-white layers and then solves between those results. Extra emitters change
-the point set and layer order; they should not force a free-form unconstrained
-N-channel optimizer.
+A CCT-style `RGB + CW + WW` profile is the useful example. Strict sub-gamut is
+not just "pick RGB+CW or RGB+WW". With three outer emitters and two inner
+emitters, the legal topology includes direct outer-edge-to-inner triangles and
+direct outer-to-inner-pair bridge triangles:
+
+```text
+Black
+
+Singles:
+    R, G, B, CW, WW
+
+Duals:
+    RG, RB, BG
+    R+CW, G+CW, B+CW
+    R+WW, G+WW, B+WW
+    CW+WW
+
+3-channel direct strict candidates:
+    RG+CW, RB+CW, BG+CW
+    RG+WW, RB+WW, BG+WW
+    R+CW+WW, G+CW+WW, B+CW+WW
+```
+
+Those candidates are all still strict sub-gamut candidates because each one is a
+single direct legal topology. The overdrive model is the separate mode that
+solves a CW layer and a WW layer, then solves between the two solved results.
+
+When multiple direct strict candidates overlap, the default policy should favor
+emitter/power efficiency because that is the practical purpose of sub-gamut
+selection. Other profile policies can bias toward a particular inner emitter,
+CCT, hue region, or measured-pass family. For ambiguous regions such as an `RB`
+side with no magenta-side inner emitter, the policy may choose between `RB+CW`,
+`RB+WW`, or an outer-to-inner-pair bridge such as `R+CW+WW` / `B+CW+WW` based on
+measured residual, current draw, headroom, and smoothness/hysteresis.
 
 ---
 

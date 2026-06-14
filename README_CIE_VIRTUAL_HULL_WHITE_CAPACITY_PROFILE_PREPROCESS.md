@@ -391,12 +391,14 @@ LP legacy remains a direct feasibility/reference endpoint. The virtual-hull prof
 ## Relationship to multi-emitter sub-gamut and overdrive
 
 The profile-preprocessing framing fits multi-emitter packages naturally, but it
-should preserve the same distinction used by the main builder:
+must preserve the same strict/overdrive distinction used by the main builder:
 
 ```text
 strict multi-emitter sub_gamut:
-    use virtual/reference emitter positions to choose one legal direct topology
-    expand that direct solve back to physical channels
+    use virtual/reference emitter positions to build the legal direct topology
+    choose one containing line/triangle/simplex at a time
+    include outer-edge+inner and outer+inner-pair bridge candidates
+    expand that one direct solve back to physical channels
 
 multi-emitter overdrive / layered simplex:
     create solved inner-anchor or virtual known points first
@@ -408,25 +410,35 @@ mode silently behave like overdrive.
 
 ### Strict multi-emitter sub-gamut with virtual emitters
 
-For RGBCCT:
+For `RGB + CW + WW`:
 
 ```text
 physical emitters:
-    R, G, B, WW, CW
+    R, G, B, CW, WW
 
 preprocessing:
     R'  = reference-space red
     G'  = reference-space green
     B'  = reference-space blue
-    WW' = reference-space warm-white inner anchor
     CW' = reference-space cool-white inner anchor
+    WW' = reference-space warm-white inner anchor
+
+strict topology:
+    singles: R', G', B', CW', WW'
+    duals:   RG, RB, BG; R/G/B + CW'; R/G/B + WW'; CW'+WW'
+    direct triangles:
+        RG+CW', RB+CW', BG+CW'
+        RG+WW', RB+WW', BG+WW'
+        R+CW'+WW', G+CW'+WW', B+CW'+WW'
 
 strict solve:
-    build direct triangle fans from R'-G'-B' to each inner anchor
-    evaluate direct candidates such as RGWW, GBWW, BRWW, RGCW, GBCW, BRCW
-    choose one direct legal candidate by residual / CCT / headroom / profile policy
-    expand that one solve back into R/G/B/WW/CW physical channels
+    choose one direct legal candidate by containment + policy
+    expand that one solve back into R/G/B/CW/WW physical channels
 ```
+
+The `outer + CW + WW` bridge triangles are still strict topology because they
+are direct simplexes. They are different from the overdrive policy that solves a
+full CW layer and a full WW layer, then blends the solved layer outputs.
 
 For RGBY+W or RGBV+W:
 
@@ -440,13 +452,24 @@ preprocessing:
     keep W' as inner anchor
 
 strict solve:
-    build triangle fan from the virtual outer hull to W'
+    build direct triangle fan from the virtual outer hull to W'
     solve the containing direct triangle, e.g. RYW, YGW, GBW, or BRW
     expand that direct solve back into physical channels
 ```
 
-Strict mode may choose between legal direct candidates, but it should not solve
-multiple inner-anchor outputs and then blend them as a second stage.
+When several direct strict candidates overlap, the virtual profile should expose
+the same policy hooks as the normal physical profile:
+
+```text
+default: emitter/power efficiency
+secondary: residual, headroom, measured pass/fail, CCT/hue policy, hysteresis
+```
+
+This is important for CCT packages. A CW emitter that leans toward cyan can make
+CW-side candidates efficient near cyan/blue-green. A WW emitter that leans
+toward yellow can make WW-side candidates efficient near yellow/orange. Without
+a magenta-side inner emitter, RB-side regions may need a user/profile policy to
+choose between CW, WW, or CW+WW bridge candidates.
 
 ### Multi-emitter overdrive with virtual emitters
 
@@ -467,11 +490,9 @@ inner anchors to create candidate known points before the final overdrive or
 correction solve.
 
 This keeps arbitrary emitter packages out of unconstrained N-channel solving:
-extra emitters change the virtual point set and the allowed strict/overdrive
-solve family, not the fundamental simplex primitive.
+extra emitters change the legal strict candidate set and the optional overdrive
+layer set, not the fundamental simplex primitive.
 
-
----
 
 ## Relationship to capture-cloud correction
 

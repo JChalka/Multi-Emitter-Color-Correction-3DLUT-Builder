@@ -1044,12 +1044,13 @@ This lets the builder learn whether introducing W or another emitter helps a reg
 ## 13. Multi-emitter sub-gamut and overdrive models
 
 The RGBW model generalizes to packages with arbitrary emitter counts, but the
-multi-emitter family must be split into two distinct solve classes:
+multi-emitter family has two separate solve classes:
 
 ```text
 strict multi-emitter sub_gamut:
     direct legal topology solve
-    one containing physical/virtual simplex at a time
+    one containing physical/virtual line/triangle/simplex at a time
+    includes all legal direct candidates implied by the emitter topology
     no solve-both-inner-anchors-then-blend behavior
 
 multi-emitter overdrive / layered simplex:
@@ -1060,8 +1061,8 @@ multi-emitter overdrive / layered simplex:
 
 The earlier shorthand "multi-emitter layered simplex" mostly described the
 second class. It should be treated as the **overdrive / virtual prediction**
-model for 5+ emitter packages. The strict `sub_gamut` model also applies to
-5+ emitters, but it follows the same direct-topology rule as RGBW strict mode.
+model for 5+ emitter packages. Strict `sub_gamut` also applies to 5+ emitters,
+but it follows the same direct-topology rule as RGBW strict mode.
 
 ### Emitter classification
 
@@ -1069,12 +1070,12 @@ model for 5+ emitter packages. The strict `sub_gamut` model also applies to
 outer emitter:
     expands or defines the device hull
     becomes a hull vertex / sub-gamut-creating point
-    participates in physical triangle/simplex construction
+    participates in physical line/triangle/simplex construction
 
 inner emitter:
     lives inside the device hull
     does not expand gamut
-    becomes an inner anchor for strict fans or overdrive layers
+    becomes an inner anchor for strict fans / bridge simplexes or overdrive layers
 
 edge emitter:
     lies on or near an existing hull edge
@@ -1082,54 +1083,132 @@ edge emitter:
     classification should be profile-configurable when measurements are ambiguous
 ```
 
-Classification is shared by strict and overdrive modes, but the way the
-classified points are consumed is different.
+Classification is shared by strict and overdrive modes, but the classified
+points are consumed differently.
 
 ---
 
 ### 13.1 Strict multi-emitter `sub_gamut` model
 
 Strict multi-emitter `sub_gamut` is the 5+ emitter equivalent of strict RGBW
-sub-gamut solving. It uses the measured or virtualized emitter geometry to find
-a **single legal local line/triangle/simplex** that contains the target, then
+sub-gamut solving. It uses measured or virtualized emitter geometry to find a
+**single legal local line/triangle/simplex** that contains the target, then
 solves only that local topology.
 
-It does **not** solve every inner emitter layer and then blend those solved
+It does **not** solve every inner-emitter layer and then blend those solved
 layers. That behavior belongs to the overdrive model.
 
-#### Strict topology rules
+#### General strict topology construction
+
+Let:
 
 ```text
-RGB-only:
-    one outer triangle R-G-B
-
-RGBW:
-    outer hull R-G-B
-    inner anchor W
-    legal triangles: RGW, GBW, BRW
-
-RGBY + W where Y expands the outer hull:
-    outer hull R-Y-G-B, ordered by measured xy
-    inner anchor W
-    legal triangles: RYW, YGW, GBW, BRW
-
-RGBCCT:
-    outer hull R-G-B
-    inner anchors WW and CW
-    legal strict candidates are direct fan triangles such as RGWW, GBWW, BRWW,
-    RGCW, GBCW, BRCW, depending on which fan contains the target
+O = ordered outer-hull emitters
+I = inner emitters
+E = edge emitters after profile policy/classification
 ```
 
-For strict mode, multiple inner emitters are **alternatives**, not automatic
-layers. If both warm-white and cool-white fans can produce a target, the
-selection policy may choose the best direct legal simplex by residual, CCT
-policy, Y/headroom, or measured pass/fail evidence, but the selected output is
-still one direct legal topology.
+For strict mode, build legal direct candidates from the topology:
+
+```text
+single candidates:
+    every emitter: O_i, I_j, E_k
+
+dual candidates:
+    adjacent outer hull edges O_i + O_{i+1}
+    outer + inner lines O_i + I_j
+    inner + inner lines I_j + I_k
+    edge-refined direct lines allowed by the profile
+
+3-channel candidates:
+    outer edge + one inner: O_i + O_{i+1} + I_j
+    one outer + two inners: O_i + I_j + I_k
+    edge-refined direct triangles allowed by the profile
+    optional inner-only triangles I_j + I_k + I_l when three inner emitters form
+        a valid inner simplex and the profile allows it
+```
+
+For RGBW, `I = {W}`, so this reduces to the familiar `RGW`, `GBW`, `BRW`
+triangle fan. For 2+ inner emitters, the extra `outer + inner + inner` bridge
+triangles are part of strict sub-gamut topology. They are direct simplexes, not
+overdrive blends.
+
+#### RGB+CCT strict topology example
+
+For an `RGB + CW + WW` profile with outer hull `R,G,B` and two inner emitters
+`CW,WW`, strict candidates include:
+
+```text
+Black
+
+Singles:
+    R, G, B, CW, WW
+
+Duals:
+    outer edges:       RG, RB, BG
+    outer + CW:        R+CW, G+CW, B+CW
+    outer + WW:        R+WW, G+WW, B+WW
+    inner bridge:      CW+WW
+
+3-channel direct strict candidates:
+    outer edge + CW:   RG+CW, RB+CW, BG+CW
+    outer edge + WW:   RG+WW, RB+WW, BG+WW
+    outer + CW + WW:   R+CW+WW, G+CW+WW, B+CW+WW
+```
+
+The `outer + CW + WW` triangles are required for the correct 2-inner topology.
+They cover the bridge between the two inner anchors and each outer vertex. They
+should not be conflated with the overdrive behavior that solves a whole CW fan
+and a whole WW fan, then blends those solved outputs.
+
+#### Strict candidate overlap policy
+
+With multiple inner emitters, strict candidates can overlap in xy. The overlap
+may be tiny for common CCT geometries, but it must still have an explicit
+policy. The default should be **emitter/power efficiency**, because strict
+sub-gamut selection is primarily about choosing the most efficient legal local
+basis for the requested target.
+
+Useful ranking signals:
+
+```text
+primary objective:
+    valid direct solve with low residual to target XYZ/xyY
+
+default efficiency tie-break:
+    minimize estimated current / power for requested Y
+    or maximize emitted Y per normalized current
+
+secondary tie-breaks:
+    channel headroom / clipping margin
+    measured pass/fail history for that family
+    lower expected dE / dY from response curves
+    smoother topology continuity / hysteresis from neighboring inputs
+    user-selected hue or CCT bias
+```
+
+Example policy consequences:
+
+```text
+CW close to cyan/green-blue:
+    G+BCW or GBCW-style regions may rank efficiently near cyan/blue-green.
+
+WW close to yellow/red:
+    RGWW or red/yellow-side regions may rank efficiently near yellow/orange.
+
+No magenta-side inner emitter:
+    RB-side targets may be ambiguous. Policy can choose RB+CW closer to blue,
+    RB+WW closer to red, or bridge triangles such as R+CW+WW / B+CW+WW when
+    they are more efficient or measure better.
+```
+
+The overlap decision is user-facing profile behavior, not a hidden numerical
+accident. Profiles should record the selected policy.
 
 #### Strict algorithm
 
 ```text
-function solve_strict_multi_emitter(source_rgb, emitter_profile):
+function solve_strict_multi_emitter(source_rgb, emitter_profile, strict_policy):
     X_t  = source_rgb_to_led_absolute_XYZ(source_rgb)
     xy_t = XYZ_to_xy(X_t)
 
@@ -1142,27 +1221,28 @@ function solve_strict_multi_emitter(source_rgb, emitter_profile):
 
     X_t, xy_t = project_to_hull_if_needed(X_t, hull)
 
-    candidates = []
+    legal = build_strict_candidate_set(
+        outer_hull=hull,
+        inner_emitters=inner,
+        edge_emitters=edge,
+        policy=strict_policy,
+    )
 
-    if inner is empty:
-        for simplex in triangulate_outer_hull(hull):
-            if xy_t is inside simplex.xy:
-                candidates.append(solve_direct_simplex(simplex, X_t))
-    else:
-        for anchor in inner:
-            fan = build_triangle_fan(hull, anchor)
-            for simplex in fan:
-                if xy_t is inside simplex.xy:
-                    candidates.append(solve_direct_simplex(simplex, X_t))
+    candidates = []
+    for simplex in legal:
+        if xy_t lies on/inside simplex.xy geometry:
+            candidates.append(solve_direct_simplex(simplex, X_t))
 
     if candidates is empty:
-        candidates = direct_nnls_projection_candidates(hull, inner, X_t)
+        candidates = direct_nnls_projection_candidates(legal, X_t)
 
     best = rank_strict_candidates(candidates,
                                   residual,
-                                  topology_policy,
+                                  efficiency,
                                   headroom,
-                                  pass_fail_dictionary)
+                                  pass_fail_dictionary,
+                                  smoothness_hysteresis,
+                                  user_policy)
     return normalize_and_quantize(best.f)
 ```
 
@@ -1176,41 +1256,18 @@ and expanded into the full output tuple:
 
 ```math
 f_i =
-\begin{cases}
-\frac{t_i}{\max(1, \max_j t_j)}, & i \in S \\
-0, & i \notin S
+egin{cases}
+rac{t_i}{\max(1, \max_j t_j)}, & i \in S \
+0, & i 
+otin S
 \end{cases}
 ```
 
 This preserves the core strict invariant:
 
 ```text
-strict mode = direct local topology only
+strict mode = one direct local topology only
 ```
-
-#### Strict RGBCCT example
-
-For an RGBCCT strip, strict mode can evaluate both warm-white and cool-white
-fans, but it does not combine them unless the selected legal topology itself
-contains both anchors by explicit profile policy.
-
-```text
-candidate family A:
-    RGB + WW fan
-    choose containing direct triangle, e.g. RGWW
-
-candidate family B:
-    RGB + CW fan
-    choose containing direct triangle, e.g. RGCW
-
-strict final:
-    choose one direct legal candidate
-    do not blend RGWW result with RGCW result as a second stage
-```
-
-A profile may still prefer WW or CW by CCT, by measured dE, by luminance
-headroom, or by smoothness, but the chosen result remains a direct strict
-sub-gamut output.
 
 ---
 
@@ -1233,6 +1290,17 @@ known points:
 This is analogous to RGBW WX modes: it is constrained and reproducible, but it
 is not the same thing as strict direct sub-gamut solving.
 
+For RGBCCT, overdrive may do this:
+
+```text
+solve RGB+WW fan result  → KnownPoint_WW
+solve RGB+CW fan result  → KnownPoint_CW
+solve between KnownPoint_WW and KnownPoint_CW by CCT / Y / dE / policy
+```
+
+That is valid overdrive behavior, but it should not be documented as the strict
+5-emitter sub_gamut topology.
+
 #### Overdrive algorithm
 
 ```text
@@ -1245,187 +1313,39 @@ function solve_multi_emitter_overdrive(source_rgb, emitter_profile, overdrive_po
 
     emitters = load_emitter_profile()
     outer, inner, edge = classify_emitters_by_xy_hull(emitters)
-    hull = build_ordered_outer_hull(outer, edge_policy=edge.policy)
+    X_t, xy_t = project_to_profile_hull_if_needed(X_t, outer, edge)
 
-    X_t, xy_t = project_to_hull_if_needed(X_t, hull)
+    known_points = []
 
-    virtual_points = []
-    for anchor in selected_inner_or_virtual_anchors(overdrive_policy):
-        fan = build_triangle_fan(hull, anchor)
-        tri = find_containing_triangle_or_best_projection(fan, xy_t, X_t)
-        f_anchor = solve_xyz(tri.P, X_t)
-        f_anchor = expand_to_full_channel_tuple(f_anchor, tri.channels)
-        X_anchor = synthesize_XYZ(f_anchor)
-        virtual_points.append(KnownPoint(
-            xy=XYZ_to_xy(X_anchor),
-            XYZ=X_anchor,
-            f=f_anchor,
-            source="overdrive_inner_anchor",
-            trust="model_anchor"
+    for layer in overdrive_policy.selected_layers(inner, edge):
+        layer_result = solve_layer_or_virtual_model(X_t, xy_t, layer)
+        known_points.append(KnownPoint(
+            XYZ=layer_result.expected_XYZ,
+            xyY=layer_result.expected_xyY,
+            output_tuple=layer_result.physical_channels,
+            source="multi_emitter_overdrive_layer",
+            trust=layer_result.trust,
         ))
 
-    if len(virtual_points) == 1:
-        f = virtual_points[0].f
-    elif virtual_points_form_valid_simplex(virtual_points, xy_t):
-        weights = solve_between_virtual_points(virtual_points, overdrive_policy)
-        f = Σ_j weights[j] * virtual_points[j].f
-    else:
-        f = reduce_degenerate_inner_anchor_line_chain(virtual_points, overdrive_policy)
-
-    f = normalize_and_apply_policy(f)
+    final_weights = solve_target_inside_known_points(xy_t, known_points,
+                                                     overdrive_policy)
+    f = sum(weight_j * known_points[j].output_tuple for j in final_weights)
+    f = normalize_by_limiting_channel(f)
     return quantize(f)
 ```
 
-### RGBCCT / warm-cool overdrive model
-
-Warm white and cool white are both inner anchors. In overdrive mode:
-
-```text
-1. Solve target using RGB + WW as one RGBW-like inner-anchor model.
-2. Solve target using RGB + CW as another RGBW-like inner-anchor model.
-3. Treat both solved outputs as virtual points with known XYZxyY and channel tuples.
-4. Blend / solve between those points using CCT, Y, dE, or profile policy.
-5. Expand final weights back into R/G/B/WW/CW.
-```
-
-For two inner anchors, the final stage can be a line solve:
-
-```math
-f = (1-\eta) f_{WW} + \eta f_{CW}
-```
-
-where `η` can be chosen by:
+Overdrive ranking can intentionally optimize objectives that strict mode should
+not optimize directly:
 
 ```text
-CCT target match
-maximum Y
-minimum RGB residual
-best measured dE
-smooth WW↔CW transition
-profile-specific warm/cool preference
-overdrive / white-capacity policy
+maximize useful Y / HDR wallwash brightness
+choose a CCT or tint path between inner anchors
+blend toward measured lower-dE known points
+increase W/CW/WW participation when verifier says it is stable
+respect thermal/current budgets and user brightness policy
 ```
 
-### RGBY / RGBV / outer-hull expansion
 
-When an added emitter expands the outer hull, it becomes a hull vertex in both
-strict and overdrive modes.
-
-Examples:
-
-```text
-RGB + yellow/amber outside RG edge:
-    old hull: R-G-B
-    new hull: R-Y-G-B
-    strict W fan: RYW, YGW, GBW, BRW
-
-RGB + violet outside BR edge:
-    old hull: R-G-B
-    new hull: R-G-B-V
-    strict W fan: RGW, GBW, BVW, VRW
-```
-
-Strict mode solves the containing direct fan triangle. Overdrive mode may first
-create virtual solved outputs for one or more inner anchors, then solve between
-those virtual outputs.
-
-### Degenerate inner-anchor line fallback
-
-A rare edge case occurs when additional inner emitters do not form a valid final
-inner-emitter triangle/simplex for the residual inner-anchor solve. This can
-happen when inner anchors are collinear, nearly collinear, or arranged such that
-the target cannot be enclosed by the inner-anchor virtual points.
-
-This fallback applies only to multi-emitter overdrive / virtual prediction
-models. It is not part of strict sub-gamut mode.
-
-For overdrive prediction models, do not promote this to an unconstrained
-N-channel solve. Keep reducing the problem through known-point line solves.
-
-#### Three-point inner line
-
-Given:
-
-```text
-OuterA --- Inner --- OuterB
-```
-
-First run the normal full virtual solve for each relevant inner/outer-adjacent
-segment, producing known points:
-
-```text
-SolveOAI = solve_line_or_pair(OuterA, Inner, target_policy)
-SolveIOB = solve_line_or_pair(Inner, OuterB, target_policy)
-```
-
-Then solve between those solved virtual points:
-
-```text
-Final = solve_line_or_pair(SolveOAI, SolveIOB, target_policy)
-```
-
-In output-tuple form, each solved point is still a known point:
-
-```math
-K_{OAI} = \{xy_{OAI}, X_{OAI}, f_{OAI}\}
-```
-
-```math
-K_{IOB} = \{xy_{IOB}, X_{IOB}, f_{IOB}\}
-```
-
-The final blend is:
-
-```math
-f = (1-\eta) f_{OAI} + \eta f_{IOB}
-```
-
-where `η` is chosen by the same line-solve policy used elsewhere:
-
-```text
-target xy projection onto the line
-CCT / Y / dE policy
-measured correction preference
-profile-specific overdrive policy
-```
-
-#### Four-point and longer inner lines
-
-For a four-point line:
-
-```text
-OuterA --- InnerA --- InnerB --- OuterB
-```
-
-reduce it by adjacent pair solves:
-
-```text
-K_left  = solve_line_or_pair(OuterA, InnerA, target_policy)
-K_right = solve_line_or_pair(InnerB, OuterB, target_policy)
-Final   = solve_line_or_pair(K_left, K_right, target_policy)
-```
-
-For longer line chains, apply the same recursive reduction until the problem
-collapses to an already-supported 3-line or 2-line solve.
-
-#### Constraint
-
-```text
-strict multi-emitter sub_gamut:
-    direct legal line/triangle/simplex only
-    no solved-inner-anchor blending unless the selected topology explicitly contains it
-
-multi-emitter overdrive:
-    may solve multiple inner-anchor layers first
-    may solve/blend between those solved known points
-    may use the degenerate inner-anchor line fallback
-```
-
-This distinction keeps the strict path predictable while still allowing the
-overdrive path to use the same known-point/simplex machinery for brightness,
-white-capacity, CCT, or measured-dE optimization.
-
----
 ## 14. Tetrahedral LUT interpolation
 
 The LUT runtime should use tetrahedral interpolation by default.
