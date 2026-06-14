@@ -1256,10 +1256,9 @@ and expanded into the full output tuple:
 
 ```math
 f_i =
-egin{cases}
-rac{t_i}{\max(1, \max_j t_j)}, & i \in S \
-0, & i 
-otin S
+\begin{cases}
+\dfrac{t_i}{\max(1, \max_{j \in S} t_j)}, & i \in S \\
+0, & i \notin S
 \end{cases}
 ```
 
