@@ -239,11 +239,39 @@ solves a CW layer and a WW layer, then solves between the two solved results.
 
 When multiple direct strict candidates overlap, the default policy should favor
 emitter/power efficiency because that is the practical purpose of sub-gamut
-selection. Other profile policies can bias toward a particular inner emitter,
-CCT, hue region, or measured-pass family. For ambiguous regions such as an `RB`
-side with no magenta-side inner emitter, the policy may choose between `RB+CW`,
-`RB+WW`, or an outer-to-inner-pair bridge such as `R+CW+WW` / `B+CW+WW` based on
-measured residual, current draw, headroom, and smoothness/hysteresis.
+selection. Additional selectable policies should be documented and surfaced
+because the "best" strict candidate is not always the same for every setup:
+
+```text
+power_efficiency:
+    choose the direct solve that reaches the target with the lowest estimated
+    current / power, or highest Y per normalized current.
+
+channel_resolution:
+    choose the solve that preserves the most useful channel granularity near its
+    limiting/max point while still solving the requested chromaticity. This can
+    avoid candidates where one channel is almost unused, quantized too coarsely,
+    or driven into a region with poor low-end precision.
+
+y_preserving_split:
+    when a split region can choose between candidates such as RB+CW and RB+WW,
+    prefer the decision boundary that keeps solved Y / max-achievable Y similar
+    across neighboring input values, so one side of the split does not become
+    unintentionally brighter than the other.
+
+virtual_inner_anchor:
+    optionally create a constrained virtual inner anchor for a missing hue-side
+    region, such as a magenta-side RB bridge built from CW+WW behavior. This is
+    technically overdrive, not strict sub_gamut, but it can be exposed as a
+    controlled virtual-gamut/virtual-primary policy.
+```
+
+For the virtual-inner-anchor policy, the virtual point should not be introduced
+alone. A single RB-side virtual primary can make that sub-gamut brighter than the
+others. The profile should build a balanced set of sibling virtual primaries
+across the outer sectors, such as `RBCWWW`, `RGCWWW`, and `BGCWWW` virtual-primary equivalents,
+so runtime behavior resembles a coherent expanded virtual primary set rather
+than a one-off brightness spike.
 
 ---
 

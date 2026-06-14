@@ -461,15 +461,34 @@ When several direct strict candidates overlap, the virtual profile should expose
 the same policy hooks as the normal physical profile:
 
 ```text
-default: emitter/power efficiency
-secondary: residual, headroom, measured pass/fail, CCT/hue policy, hysteresis
+power_efficiency:
+    default strict policy; choose the valid direct simplex with the lowest
+    estimated current / power for the requested target Y.
+
+channel_resolution:
+    choose the valid direct simplex that preserves the most useful channel
+    granularity near the limiting/max channel while still solving chromaticity.
+
+y_preserving_split:
+    keep solved Y and max-achievable Y similar across split decisions such as
+    RB+CW versus RB+WW, so one side of a small overlap does not become
+    unintentionally brighter.
+
+virtual_inner_anchor:
+    optional constrained overdrive policy that creates a missing hue-side
+    virtual inner anchor, for example an RB-side magenta-like bridge derived
+    from CW+WW behavior.
 ```
 
-This is important for CCT packages. A CW emitter that leans toward cyan can make
-CW-side candidates efficient near cyan/blue-green. A WW emitter that leans
-toward yellow can make WW-side candidates efficient near yellow/orange. Without
-a magenta-side inner emitter, RB-side regions may need a user/profile policy to
-choose between CW, WW, or CW+WW bridge candidates.
+The first three policies still select one direct strict simplex. The virtual
+inner-anchor policy is different: it is technically overdrive / virtual-primary
+behavior, even if it can be implemented as a tightly constrained profile option.
+
+A virtual inner anchor should not be introduced alone. A single RB-side virtual
+primary can make the `R-B-virtual` region brighter than neighboring regions. A
+profile should instead build a coherent sibling set, such as `RBCWWW`,
+`RGCWWW`, and `BGCWWW` virtual primaries, so the virtual geometry replaces or
+augments the inner anchors consistently across the outer sectors.
 
 ### Multi-emitter overdrive with virtual emitters
 

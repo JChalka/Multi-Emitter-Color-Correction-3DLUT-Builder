@@ -1169,25 +1169,186 @@ policy. The default should be **emitter/power efficiency**, because strict
 sub-gamut selection is primarily about choosing the most efficient legal local
 basis for the requested target.
 
-Useful ranking signals:
+The overlap decision is user-facing profile behavior, not a hidden numerical
+accident. Profiles should record the selected policy and verifier/correction
+reports should record which policy selected each ambiguous candidate.
+
+##### Policy: power efficiency
+
+Power efficiency is the default strict-overlap policy.
+
+Goal:
 
 ```text
-primary objective:
-    valid direct solve with low residual to target XYZ/xyY
-
-default efficiency tie-break:
-    minimize estimated current / power for requested Y
-    or maximize emitted Y per normalized current
-
-secondary tie-breaks:
-    channel headroom / clipping margin
-    measured pass/fail history for that family
-    lower expected dE / dY from response curves
-    smoother topology continuity / hysteresis from neighboring inputs
-    user-selected hue or CCT bias
+choose the valid direct simplex that reaches the requested chromaticity/Y with
+the lowest estimated current or power
 ```
 
-Example policy consequences:
+Equivalent scoring directions:
+
+```text
+minimize:
+    estimated_current(candidate, target_Y)
+
+or maximize:
+    emitted_Y(candidate) / estimated_current(candidate)
+```
+
+This is the closest generalization of RGBW strict sub-gamut behavior. Strict
+mode chooses a local legal basis not because it is the only possible basis, but
+because it should be the most efficient physical basis for that region of the
+gamut.
+
+Useful inputs:
+
+```text
+per-channel current model
+per-channel Y response
+thermal/current headroom
+measured efficiency by active channel family
+power limits / ABL policy
+```
+
+##### Policy: channel resolution
+
+Channel-resolution policy chooses the valid direct solve that preserves the most
+useful drive granularity while still solving the requested chromaticity.
+
+This is useful when two candidates both match xy, but one of them requires a
+channel to sit near the floor or pushes one channel into a hard limiting state.
+Those cases can create coarse quantization, visible stepping, or poor temporal
+precision even if the chromaticity solve is valid.
+
+Goal:
+
+```text
+choose the valid direct simplex whose solved channel vector has the best usable
+resolution near its limiting / maximum channel
+```
+
+Useful scoring signals:
+
+```text
+prefer:
+    largest minimum participating-channel drive above the quantization floor
+    strongest limiting-channel headroom before clipping
+    smooth derivative of output tuple versus input RGB
+    best effective-q16 / TemporalBFI precision in the active channels
+
+penalize:
+    almost-zero participating channels
+    channels pinned at exactly full scale over a wide region
+    candidates with large output jumps across neighboring input values
+    candidates whose Y response curve is poorly sampled or poorly conditioned
+```
+
+This policy is especially relevant when a bridge candidate such as
+`R+CW+WW` or `B+CW+WW` solves chromaticity but would place one inner emitter so
+low that runtime granularity becomes worse than an `RB+CW` or `RB+WW` choice.
+
+##### Policy: Y-preserving split gamut
+
+Y-preserving split policy handles adjacent ambiguous regions where the policy
+boundary itself can create luminance discontinuity.
+
+The motivating case is an `RB` side without a magenta-side inner emitter:
+
+```text
+candidate A: RB+CW, closer to blue/cyan-side behavior
+candidate B: RB+WW, closer to red/yellow-side behavior
+candidate C: R+CW+WW or B+CW+WW bridge triangle
+```
+
+All candidates may be chromatically plausible in a small overlap region, but one
+side can end up brighter than the other if the split is chosen only by xy error
+or current draw.
+
+Goal:
+
+```text
+choose or blend the policy boundary so solved Y and max-achievable Y remain
+similar across neighboring input values
+```
+
+Useful scoring signals:
+
+```text
+penalize:
+    sudden Y jump across the RBCW/RBWW decision boundary
+    large difference in max-achievable Y for adjacent candidate families
+    abrupt change in limiting channel or active channel family
+
+prefer:
+    candidate families with similar Y range at matched xy/value
+    smooth Y derivative across the split
+    continuity with neighboring hue/value samples
+    measured pass/fail or response-curve evidence that preserves perceived Y
+```
+
+This does not mean strict mode should blend two solved layers. It means the
+strict selection policy should account for Y continuity when it chooses which
+single direct simplex owns an overlap region.
+
+##### Policy: constrained virtual inner anchor
+
+A missing hue-side inner emitter can leave an awkward strict overlap decision.
+For example, `RGB + CW + WW` may have inner anchors biased toward cyan/green-blue
+and yellow/red, but no inner anchor near magenta. In that case the `RB` side may
+not have an obviously efficient strict inner candidate.
+
+One optional policy is to create a constrained virtual inner anchor for that
+missing region:
+
+```text
+build a virtual RB-side inner point from measured/solved CW+WW behavior
+use it as a virtual primary / KnownPoint for the ambiguous region
+solve against that virtual point at runtime
+```
+
+This is **technically overdrive**, not strict sub_gamut, because the virtual
+point is a solved/generated target rather than a physical direct simplex.
+However, it can be exposed as a constrained policy because runtime behavior is
+similar to the virtual-gamut / virtual-primary idea: the solver sees a coherent
+virtual point and expands it back to physical channels.
+
+The important guardrail is that a virtual point should not be introduced alone.
+If only one RB-side virtual primary such as an `RB+CW+WW` virtual point is
+created, then the `R-B-V_RB` region can become brighter than the neighboring
+regions simply because that virtual point has more physical brightness headroom.
+
+To keep the virtual geometry balanced, create a sibling virtual-primary set:
+
+```text
+V_RBCWWW:
+    magenta-side / RB bridge virtual primary built from R/B/CW/WW behavior
+
+V_RGCWWW:
+    red-green / warm-side sibling virtual primary
+
+V_BGCWWW:
+    blue-green / cool-side sibling virtual primary
+```
+
+In the CCT-style case, the RB-side virtual primary should be balanced by
+`RGCWWW` and `BGCWWW` siblings rather than replacing only one region. These
+siblings can act as virtual replacements/augmentations for the neighboring WW
+and CW anchors so the resulting virtual fan has comparable brightness behavior
+across the outer sectors.
+
+The exact names can be profile-defined, but the policy should preserve this
+rule:
+
+```text
+do not add one isolated high-Y virtual primary;
+add a coherent set of virtual primaries that replaces or augments the relevant
+inner anchors across the outer sectors
+```
+
+This keeps the virtual policy closer to the existing WX/radial virtual-primary
+structure and prevents a one-off virtual primary from creating an unintended
+brightness island.
+
+##### Example policy consequences
 
 ```text
 CW close to cyan/green-blue:
@@ -1197,13 +1358,13 @@ WW close to yellow/red:
     RGWW or red/yellow-side regions may rank efficiently near yellow/orange.
 
 No magenta-side inner emitter:
-    RB-side targets may be ambiguous. Policy can choose RB+CW closer to blue,
-    RB+WW closer to red, or bridge triangles such as R+CW+WW / B+CW+WW when
-    they are more efficient or measure better.
+    RB-side targets may be ambiguous. Power policy might choose the lowest
+    current of RB+CW, RB+WW, R+CW+WW, or B+CW+WW. Channel-resolution policy might
+    choose the candidate with better active-channel precision. Y-preserving
+    policy might move the split boundary so the two sides have similar Y.
+    Virtual-inner-anchor policy might create a constrained RB-side virtual
+    anchor, but only alongside balanced RG/BG sibling virtual primaries.
 ```
-
-The overlap decision is user-facing profile behavior, not a hidden numerical
-accident. Profiles should record the selected policy.
 
 #### Strict algorithm
 

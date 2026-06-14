@@ -599,6 +599,33 @@ smoothness/hysteresis. This matters in ambiguous regions such as `RB` when there
 is no magenta-side inner emitter: policy may choose `RB+CW`, `RB+WW`,
 `R+CW+WW`, or `B+CW+WW` depending on efficiency and measured behavior.
 
+The roadmap should track these overlap policies explicitly:
+
+```text
+power_efficiency:
+    default policy; choose the valid direct simplex with the lowest estimated
+    current / power for the requested target Y.
+
+channel_resolution:
+    choose the valid direct simplex that preserves the best usable channel
+    granularity near the limiting/max channel while still solving chromaticity.
+
+y_preserving_split:
+    for split regions such as RBCW/RBWW, choose the decision boundary that keeps
+    solved Y / max-achievable Y similar across neighboring input values.
+
+virtual_inner_anchor:
+    optional constrained overdrive policy for missing hue-side inner anchors,
+    such as a magenta-side RB virtual anchor derived from CW+WW behavior.
+```
+
+`virtual_inner_anchor` must be treated as overdrive/virtual-primary behavior, not
+strict direct topology. If used, it should create a balanced sibling set of
+virtual primaries, not a single isolated high-Y RB virtual primary. For example,
+a profile that creates an RB/CW/WW virtual point should also define matching
+`RGCWWW` and `BGCWWW` sibling virtual points so one sub-gamut does not become
+brighter than the others simply because it received the only virtual primary.
+
 The strict path must not solve RGB+WW and RGB+CW and then blend those two solved
 outputs as a second stage. That second-stage solve is overdrive behavior.
 
@@ -1805,6 +1832,8 @@ Use the roadmap rows below for task-level status and ownership, then use the fun
 | load emitter profiles with arbitrary channel counts | planned | New emitter-profile loader -> `rgbw_lut_builder/response/multi_emitter_profile.py` and `rgbw_lut_builder/model/emitter_classification.py` | [Multi-emitter sub-gamut and overdrive models](README_MATH_MODEL.md#13-multi-emitter-sub-gamut-and-overdrive-models) | Those target owners exist as anchors. |
 | classify emitters by measured chromaticity relative to the device hull | planned | New emitter classification logic -> `rgbw_lut_builder/model/emitter_classification.py` | [Emitter classification](README_MATH_MODEL.md#emitter-classification) | `rgbw_lut_builder/model/emitter_classification.py` exists as the target owner. |
 | build strict 5+ emitter sub_gamut candidate set | planned | Strict/simplex primitives plus new layered-simplex/topology owners -> `rgbw_lut_builder/model/{layered_simplex,simplex,topology}.py` | [Strict multi-emitter sub_gamut model](README_MATH_MODEL.md#131-strict-multi-emitter-sub_gamut-model) | Generate direct legal candidates including outer-edge+inner fans, outer+inner-pair bridge triangles, inner-inner lines, and overlap-policy ranking. |
+| implement strict-overlap policy selector | planned | Policy/ranking helpers -> `rgbw_lut_builder/model/topology.py`, `rgbw_lut_builder/model/simplex.py`, and verifier metadata -> `rgbw_lut_builder/verify/reports.py` | [Strict candidate overlap policy](README_MATH_MODEL.md#strict-candidate-overlap-policy) | Add selectable policies for power efficiency, channel resolution, Y-preserving split decisions, and user/profile hue/CCT bias. |
+| add constrained virtual-inner-anchor policy | planned | Virtual-primary/overdrive policy -> `rgbw_lut_builder/model/layered_simplex.py` and virtual profile metadata -> `rgbw_lut_builder/response/multi_emitter_profile.py` | [Policy: constrained virtual inner anchor](README_MATH_MODEL.md#policy-constrained-virtual-inner-anchor) | Treat missing-hue virtual anchors as constrained overdrive, not strict topology; require balanced sibling virtual primaries rather than a single isolated high-Y virtual point. |
 | solve RGBCCT-style warm/cool overdrive layers | planned | New layered-simplex owner -> `rgbw_lut_builder/model/layered_simplex.py` | [RGBCCT / warm-cool overdrive model](README_MATH_MODEL.md#rgbcct--warm-cool-overdrive-model) | `rgbw_lut_builder/model/layered_simplex.py` exists as the target owner. |
 | solve RGBY/RGBV-style outer-hull-expanded packages | planned | New layered-simplex owner -> `rgbw_lut_builder/model/layered_simplex.py` | [RGBY / RGBV / outer-hull expansion](README_MATH_MODEL.md#rgby--rgbv--outer-hull-expansion) | `rgbw_lut_builder/model/layered_simplex.py` exists as the target owner. |
 | share known-point / simplex expansion logic with capture-cloud correction | planned | Shared simplex ownership -> `rgbw_lut_builder/model/simplex.py` and `rgbw_lut_builder/correction/measured_simplex.py` | [Common simplex solve](README_MATH_MODEL.md#2-common-simplex-solve), [Capture-cloud simplex correction](README_MATH_MODEL.md#12-capture-cloud-simplex-correction) | Those target owners exist; reusable solve/candidate functions are pinned in `docs/project_function_tree.md`. |
