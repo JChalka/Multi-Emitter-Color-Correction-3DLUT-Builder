@@ -25,7 +25,7 @@ Start here for orientation, then use the deeper docs when implementing or review
 | Document | Purpose |
 | --- | --- |
 | [`README_ROADMAP.md`](README_ROADMAP.md) | Full project roadmap, implementation phases, migration plan, current status, and future builder direction. |
-| [`README_MATH_MODEL.md`](README_MATH_MODEL.md) | Detailed solve architecture for RGB, strict RGBW sub-gamut, WX / white-overdrive, capture-cloud correction, and multi-emitter layered simplex models. |
+| [`README_MATH_MODEL.md`](README_MATH_MODEL.md) | Detailed solve architecture for RGB, strict RGBW sub-gamut, WX / white-overdrive, capture-cloud correction, and multi-emitter strict/overdrive models. |
 | [`README_CIE_VIRTUAL_HULL_WHITE_CAPACITY_PROFILE_PREPROCESS.md`](README_CIE_VIRTUAL_HULL_WHITE_CAPACITY_PROFILE_PREPROCESS.md) | Future virtual-reference-hull / virtual-emitter profile preprocessing design. |
 | [`docs/project_function_tree.md`](docs/project_function_tree.md) | Generated lookup layer mapping roadmap items to current modules, legacy sources, and candidate functions. |
 
@@ -69,7 +69,7 @@ math model = physical/topological prediction axis
 patch captures = real-world correction field
 pass/fail dictionary = measured truth override
 local line/triangle/simplex solve = shared primitive for prediction and correction
-multi-emitter packages = layered simplex composition, not unconstrained N-channel solving
+multi-emitter packages = strict sub-gamut or layered overdrive composition, not unconstrained N-channel solving
 ```
 
 The math model should produce a sane initial LUT and define legal device topology. Measurements then correct the model for real hardware and setup behavior:
@@ -180,7 +180,7 @@ wx_lp_legacy                 direct LP max-white endpoint / reference model
 
 These modes are especially relevant for ambilight / wallwash / HDR-style usage where higher W participation and higher brightness may be useful, as long as verifier data shows the residuals are predictable and correctable.
 
-### Multi-emitter layered simplex
+### Multi-emitter sub-gamut and overdrive
 
 The roadmap extends beyond RGBW. Future profiles can describe packages such as:
 
@@ -193,7 +193,26 @@ RGB+CCT+Y
 other arbitrary emitter sets
 ```
 
-The key rule is that extra emitters change the point set and layer order. They should not force a free-form unconstrained N-channel optimizer. The model classifies emitters as outer, inner, or edge anchors, then solves through layered line/triangle/simplex composition.
+The multi-emitter model has two distinct paths:
+
+```text
+strict multi-emitter sub_gamut:
+    classify outer / inner / edge emitters
+    build the legal hull or triangle fan
+    solve one containing direct line/triangle/simplex
+    preserve topology legality like RGBW strict sub_gamut
+
+multi-emitter overdrive / layered simplex:
+    solve one or more inner-anchor or virtual layers first
+    treat those solved layers as known points
+    solve/blend between those known points for brightness, CCT, or measured-dE policy
+```
+
+For example, an RGBCCT strict solve may choose a direct RGB+WW or RGB+CW fan
+triangle. The RGBCCT overdrive solve is the mode that solves both warm-white and
+cool-white layers and then solves between those results. Extra emitters change
+the point set and layer order; they should not force a free-form unconstrained
+N-channel optimizer.
 
 ---
 
@@ -328,6 +347,7 @@ instrument-corrected display profiles
 Argyll CCXX / CCMX / CCSS colorimeter correction through spotread -X
 capture-cloud correction
 arbitrary emitter profiles
+strict and overdrive multi-emitter modes
 RGBCCT / RGBY / RGBV / RGBY+W support
 tetrahedral coefficient runtime LUTs
 live adaptive calibration

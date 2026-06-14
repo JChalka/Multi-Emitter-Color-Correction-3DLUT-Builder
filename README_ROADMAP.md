@@ -20,7 +20,7 @@ instrument/spectral profile = measurement-truth normalization layer
 patch captures = real-world correction field
 pass/fail dictionary = measured truth override
 local triangle/simplex solve = shared primitive for prediction and correction
-multi-emitter packages = layered simplex composition, not unconstrained N-channel solving
+multi-emitter packages = strict sub-gamut or layered overdrive composition, not unconstrained N-channel solving
 ```
 
 The mathematical model should be good enough to build a usable initial LUT and to define expected topology. It is not the final source of truth. Measurements correct the model for real hardware, optics, wall/diffuser response, camera/colorimeter behavior, temporal rendering behavior, and LED package non-idealities.
@@ -494,9 +494,29 @@ wx_legacy_virtual_axis:
     should not be used in new metadata except to read old files/configs
 ```
 
-### Multi-emitter layered simplex
+### Multi-emitter solve families: strict sub-gamut vs overdrive
 
-Packages with more than four emitters should not be solved as unconstrained N-channel optimizations. They should be decomposed into layered simplex solves.
+Packages with more than four emitters should still avoid unconstrained
+N-channel optimization, but the roadmap needs two separate multi-emitter solve
+families:
+
+```text
+strict multi-emitter sub_gamut:
+    direct legal topology solve
+    choose one containing physical/virtual line/triangle/simplex
+    preserve the same strictness as RGBW sub_gamut
+
+multi-emitter overdrive / layered simplex:
+    opt-in virtual prediction model
+    solve one or more inner-anchor / virtual layers first
+    then solve or blend between those solved known points
+```
+
+The earlier "multi-emitter layered simplex" description mostly described the
+overdrive family. The strict `sub_gamut` model also applies to 5+ emitters and
+should be implemented as its own correctness path.
+
+Supported package examples remain:
 
 ```text
 RGBCCT        RGB + cool white + warm white
@@ -507,7 +527,7 @@ RGBYW         RGB + yellow + white
 RGB+CCT+Y     RGB + cool/warm white + yellow or amber
 ```
 
-Emitter classification:
+Emitter classification is shared by both families:
 
 ```text
 outer emitter:
@@ -516,26 +536,65 @@ outer emitter:
 
 inner emitter:
     lives inside the measured hull
-    becomes an alternate inner anchor / white-axis model
+    becomes a direct strict fan anchor or an overdrive inner-anchor layer
 
 edge emitter:
     lies on or near an existing hull edge
     treated as a hull refinement, edge anchor, or configurable ambiguous point
 ```
 
-Examples:
+#### Strict 5+ emitter `sub_gamut`
+
+Strict mode should generalize RGBW sub-gamut rather than becoming a layered
+overdrive solve.
 
 ```text
-RGBCCT:
+RGBW strict:
+    outer hull R-G-B
+    inner anchor W
+    legal direct fan triangles: RGW, GBW, BRW
+
+RGBY+W strict:
+    outer hull R-Y-G-B when Y expands the hull
+    inner anchor W
+    legal direct fan triangles: RYW, YGW, GBW, BRW
+
+RGBCCT strict:
+    outer hull R-G-B
+    inner anchors WW and CW
+    evaluate direct fan triangles for each anchor, e.g. RGWW / RGCW
+    choose one direct legal candidate by residual / CCT / headroom / profile policy
+```
+
+The strict path must not solve RGB+WW and RGB+CW and then blend those two solved
+outputs as a second stage. That second-stage solve is an overdrive behavior.
+
+#### 5+ emitter overdrive / layered simplex
+
+Overdrive mode is where the current layered-simplex description belongs:
+
+```text
+RGBCCT overdrive:
     solve RGB + warm-white as one inner-anchor model
     solve RGB + cool-white as another inner-anchor model
-    solve/blend between those solved outputs
+    solve/blend between those solved outputs by CCT/Y/dE/profile policy
 
-RGBY+W:
+RGBY+W overdrive:
     yellow expands the outer hull
     white remains an inner anchor
-    build a measured outer-hull fan against W and solve in the containing triangle
+    build measured outer-hull fan against W
+    optionally create virtual/overdrive candidates before final correction
 ```
+
+In other words:
+
+```text
+strict sub_gamut = solve one legal topology directly
+overdrive        = solve multiple virtual/legal topologies, then solve between results
+```
+
+This distinction should be reflected in CLI naming, metadata, verifier reports,
+and correction dictionaries so strict and overdrive residuals are not mixed.
 
 
 ### Degenerate inner-anchor line fallback
@@ -550,7 +609,7 @@ Rule:
 
 ```text
 if inner anchors form a valid final triangle/simplex around the target:
-    solve them normally using the layered-simplex rule
+    solve them normally using the layered-simplex overdrive rule
 else:
     reduce the inner-anchor chain through adjacent line solves
 ```
@@ -582,6 +641,7 @@ This fallback applies to **overdrive / virtual prediction models** where the
 builder is intentionally creating virtual inner-anchor results before the final
 solve. The strict sub-gamut model should remain strict: direct edge/hull lines
 are solved only between the actual legal emitter endpoints for that topology.
+
 
 ---
 
@@ -1703,19 +1763,19 @@ Use the roadmap rows below for task-level status and ownership, then use the fun
 | use learned response direction to bias correction candidates before live probing | planned | Existing candidate-ranking and retry hints -> `rgbw_lut_builder/correction/{triangle_ranker,live_retry}.py` | [Capture-cloud simplex correction](README_MATH_MODEL.md#12-capture-cloud-simplex-correction) | `rgbw_lut_builder/correction/triangle_ranker.py` and `rgbw_lut_builder/correction/live_retry.py` exist as target owners; source hint-merging functions are pinned in `docs/project_function_tree.md`. |
 | write diagnostics showing where virtual expansion helps, hurts, or remains uncertain | planned | Existing analysis/report paths -> `rgbw_lut_builder/verify/{reports,metrics}.py` | [Why this helps edge colors](README_MATH_MODEL.md#why-this-helps-edge-colors) | `rgbw_lut_builder/verify/reports.py` and `rgbw_lut_builder/verify/metrics.py` exist as target owners; source diagnostics are pinned in `docs/project_function_tree.md`. |
 
-### Phase 6: multi-emitter layered simplex support
+### Phase 6: multi-emitter sub-gamut and overdrive support
 
 | Roadmap item | Status | Move target / source | Math / prototype | Pinned work |
 | --- | --- | --- | --- | --- |
-| load emitter profiles with arbitrary channel counts | planned | New emitter-profile loader -> `rgbw_lut_builder/response/multi_emitter_profile.py` and `rgbw_lut_builder/model/emitter_classification.py` | [Multi-emitter layered simplex model](README_MATH_MODEL.md#13-multi-emitter-layered-simplex-model) | Those target owners exist as anchors. |
+| load emitter profiles with arbitrary channel counts | planned | New emitter-profile loader -> `rgbw_lut_builder/response/multi_emitter_profile.py` and `rgbw_lut_builder/model/emitter_classification.py` | [Multi-emitter sub-gamut and overdrive models](README_MATH_MODEL.md#13-multi-emitter-sub-gamut-and-overdrive-models) | Those target owners exist as anchors. |
 | classify emitters by measured chromaticity relative to the device hull | planned | New emitter classification logic -> `rgbw_lut_builder/model/emitter_classification.py` | [Emitter classification](README_MATH_MODEL.md#emitter-classification) | `rgbw_lut_builder/model/emitter_classification.py` exists as the target owner. |
-| build outer-hull triangle fans for each inner anchor | planned | Strict/simplex primitives plus new layered-simplex owner -> `rgbw_lut_builder/model/{layered_simplex,simplex}.py` | [General algorithm](README_MATH_MODEL.md#general-algorithm) | Those target owners exist; reusable strict/simplex source functions are pinned in `docs/project_function_tree.md`. |
-| solve RGBCCT-style warm/cool inner-anchor layers | planned | New layered-simplex owner -> `rgbw_lut_builder/model/layered_simplex.py` | [RGBCCT / warm-cool inner-anchor model](README_MATH_MODEL.md#rgbcct--warm-cool-inner-anchor-model) | `rgbw_lut_builder/model/layered_simplex.py` exists as the target owner. |
+| build strict outer-hull triangle fans for each inner anchor | planned | Strict/simplex primitives plus new layered-simplex/topology owners -> `rgbw_lut_builder/model/{layered_simplex,simplex,topology}.py` | [Strict multi-emitter sub-gamut model](README_MATH_MODEL.md#131-strict-multi-emitter-sub_gamut-model) | Those target owners exist; reusable strict/simplex source functions are pinned in `docs/project_function_tree.md`. |
+| solve RGBCCT-style warm/cool overdrive layers | planned | New layered-simplex owner -> `rgbw_lut_builder/model/layered_simplex.py` | [RGBCCT / warm-cool overdrive model](README_MATH_MODEL.md#rgbcct--warm-cool-overdrive-model) | `rgbw_lut_builder/model/layered_simplex.py` exists as the target owner. |
 | solve RGBY/RGBV-style outer-hull-expanded packages | planned | New layered-simplex owner -> `rgbw_lut_builder/model/layered_simplex.py` | [RGBY / RGBV / outer-hull expansion](README_MATH_MODEL.md#rgby--rgbv--outer-hull-expansion) | `rgbw_lut_builder/model/layered_simplex.py` exists as the target owner. |
 | share known-point / simplex expansion logic with capture-cloud correction | planned | Shared simplex ownership -> `rgbw_lut_builder/model/simplex.py` and `rgbw_lut_builder/correction/measured_simplex.py` | [Common simplex solve](README_MATH_MODEL.md#2-common-simplex-solve), [Capture-cloud simplex correction](README_MATH_MODEL.md#12-capture-cloud-simplex-correction) | Those target owners exist; reusable solve/candidate functions are pinned in `docs/project_function_tree.md`. |
 | write diagnostics for hull classification, ambiguous edge emitters, and inner-anchor blends | planned | New diagnostics/report owners -> `rgbw_lut_builder/verify/{reports,metrics}.py` | [Emitter classification](README_MATH_MODEL.md#emitter-classification) | Those target owners exist; later-phase diagnostic surfaces are pinned in `docs/project_function_tree.md`. |
 | add degenerate inner-anchor line fallback for overdrive prediction models | planned | New layered-simplex/simplex owner -> `rgbw_lut_builder/model/{layered_simplex,simplex}.py` | [Degenerate inner-anchor line fallback](README_MATH_MODEL.md#degenerate-inner-anchor-line-fallback) | Design is documented in the math model, and the package target owners already exist as anchors. |
-| ensure strict sub-gamut mode continues to solve only direct legal edge/hull pairs | planned | Guard strict topology in `rgbw_lut_builder/model/topology.py` while layered behavior lands in `rgbw_lut_builder/model/layered_simplex.py` | [Strict RGBW sub-gamut model](README_MATH_MODEL.md#6-strict-rgbw-sub-gamut-model) | `rgbw_lut_builder/model/topology.py` already owns strict topology behavior; the layered-simplex side is still planned. |
+| implement strict 5+ emitter sub-gamut candidate selection | planned | Guard strict topology in `rgbw_lut_builder/model/topology.py` while direct multi-emitter fan selection lands in `rgbw_lut_builder/model/layered_simplex.py` / `simplex.py` | [Strict multi-emitter sub-gamut model](README_MATH_MODEL.md#131-strict-multi-emitter-sub_gamut-model) | Strict mode must choose one direct legal line/triangle/simplex and must not solve multiple inner anchors and blend them as an overdrive stage. |
 
 ### Phase 7: offline correction field
 

@@ -388,9 +388,25 @@ LP legacy remains a direct feasibility/reference endpoint. The virtual-hull prof
 
 ---
 
-## Relationship to multi-emitter layered simplex
+## Relationship to multi-emitter sub-gamut and overdrive
 
-The profile-preprocessing framing fits multi-emitter packages naturally.
+The profile-preprocessing framing fits multi-emitter packages naturally, but it
+should preserve the same distinction used by the main builder:
+
+```text
+strict multi-emitter sub_gamut:
+    use virtual/reference emitter positions to choose one legal direct topology
+    expand that direct solve back to physical channels
+
+multi-emitter overdrive / layered simplex:
+    create solved inner-anchor or virtual known points first
+    then solve/blend between those known points
+```
+
+The virtual-reference hull can feed both families, but it should not make strict
+mode silently behave like overdrive.
+
+### Strict multi-emitter sub-gamut with virtual emitters
 
 For RGBCCT:
 
@@ -405,11 +421,11 @@ preprocessing:
     WW' = reference-space warm-white inner anchor
     CW' = reference-space cool-white inner anchor
 
-solve:
-    solve RGB+WW' layer
-    solve RGB+CW' layer
-    solve between the two inner-anchor layer results
-    expand back to R/G/B/WW/CW physical channels
+strict solve:
+    build direct triangle fans from R'-G'-B' to each inner anchor
+    evaluate direct candidates such as RGWW, GBWW, BRWW, RGCW, GBCW, BRCW
+    choose one direct legal candidate by residual / CCT / headroom / profile policy
+    expand that one solve back into R/G/B/WW/CW physical channels
 ```
 
 For RGBY+W or RGBV+W:
@@ -423,13 +439,37 @@ preprocessing:
     build virtual outer hull R'-Y'-G'-B' if Y expands the hull
     keep W' as inner anchor
 
-solve:
-    build triangle fan from virtual outer hull to W'
-    solve containing virtual triangle
-    expand weights back into physical channels
+strict solve:
+    build triangle fan from the virtual outer hull to W'
+    solve the containing direct triangle, e.g. RYW, YGW, GBW, or BRW
+    expand that direct solve back into physical channels
 ```
 
-This keeps arbitrary emitter packages out of unconstrained N-channel solving. Extra emitters change the virtual point set and layer order, not the fundamental solve primitive.
+Strict mode may choose between legal direct candidates, but it should not solve
+multiple inner-anchor outputs and then blend them as a second stage.
+
+### Multi-emitter overdrive with virtual emitters
+
+The layered behavior previously described for RGBCCT belongs to the overdrive
+family:
+
+```text
+RGBCCT overdrive:
+    solve RGB+WW' layer
+    solve RGB+CW' layer
+    treat each result as a KnownPoint with XYZxyY + output tuple
+    solve/blend between those known points
+    expand back to R/G/B/WW/CW physical channels
+```
+
+For RGBY+W or RGBV+W, overdrive can similarly use the virtual outer hull and
+inner anchors to create candidate known points before the final overdrive or
+correction solve.
+
+This keeps arbitrary emitter packages out of unconstrained N-channel solving:
+extra emitters change the virtual point set and the allowed strict/overdrive
+solve family, not the fundamental simplex primitive.
+
 
 ---
 
