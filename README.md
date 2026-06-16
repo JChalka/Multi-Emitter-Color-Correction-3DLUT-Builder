@@ -336,6 +336,86 @@ Raw and corrected measurements should both be preserved. Corrected XYZxyY should
 
 ---
 
+## Spectral characterization and lighting-quality reports
+
+Because the workflow now includes spectrophotometer readings in addition to faster corrected colorimeter captures, the project can expose more than XYZxyY correction data. Spectro captures should also be usable for deeper emitter and system characterization.
+
+The builder should distinguish between:
+
+```text
+colorimeter / corrected XYZxyY:
+    fast capture path for dense calibration, verifier runs, and LUT correction
+
+spectrophotometer SPD:
+    slower reference path for spectral correction, emitter analysis,
+    CRI / TM-30 / TLCI-style reports, and deeper optical characterization
+```
+
+Per-emitter reports should be able to summarize each physical channel and each important mixed family:
+
+```text
+single emitters:
+    R, G, B, W, CW, WW, amber, violet, yellow, etc.
+
+mixed references:
+    neutral ramp
+    strict sub_gamut white / near-white families
+    WX / overdrive high-W families
+    RGB+CCT inner-anchor blends
+    user-selected representative output tuples
+```
+
+Initial spectral metrics should include:
+
+```text
+basic SPD metadata:
+    wavelength range, wavelength step, peak wavelength, dominant wavelength,
+    centroid wavelength, FWHM, CCT/Duv where meaningful, x/y and u'/v'
+
+CRI / CIE 13.3:
+    Ra, individual Ri values, and common R9/R12-style red/blue-green checks
+
+ANSI/IES TM-30:
+    Rf, Rg, local hue-bin fidelity/chroma/hue shifts, and color-vector graphic data
+
+additional optional report families:
+    CIE 224-style fidelity metrics where useful
+    TLCI / camera-lighting consistency for video-oriented setups
+    SSI-style spectral similarity when a reference spectrum is selected
+    LM-79-style photometric/colorimetric summary fields for SSL-style reporting
+```
+
+These reports are not required for building a LUT, but they are useful for understanding what the emitters and wall/diffuser system actually are. A user may want to know whether a high-W maxbright path is only bright, whether a custom RGB+CCT strip has useful rendering quality, or whether a wallwash setup has poor red fidelity even after the LUT is chromatically accurate.
+
+The report path should preserve raw inputs and derived outputs:
+
+```text
+SpectralMeasurement:
+    instrument_id
+    correction_id / Argyll CCXX id when applicable
+    emitter_profile_id
+    geometry_id
+    output_tuple / active_channel_family
+    wavelength_nm[]
+    spectral_power[]
+    derived XYZxyY
+    derived report metrics
+
+SpectralReport:
+    report_id
+    display_profile_id
+    emitter_profile_id
+    report_standard: cri | tm30 | tlci | ssi | lm79_summary | custom
+    per_emitter_results
+    mixed_family_results
+    validation_notes
+    generated_at
+```
+
+The host GUI should eventually display these as HTML/CSV/JSON reports alongside the normal verifier tables. The standalone package should keep spectral analysis modular so LUT generation does not depend on CRI/TM-30 reporting libraries.
+
+---
+
 ## Verification and correction direction
 
 The verifier and correction layers are meant to evolve from isolated pass/fail hints into a learned response model.
@@ -405,6 +485,8 @@ build/export the existing coarse/dense LUTs
 generate True16 calibration headers
 generate binary RGB/RGBW cubes for device testing
 track Argyll CCXX / CCMX / CCSS instrument-correction metadata
+generate or review spectral characterization reports
+inspect per-emitter CRI / TM-30 / TLCI-style diagnostics
 review migration targets for the standalone builder
 ```
 
@@ -417,6 +499,7 @@ Rec.709 / Rec.2020 / P3 / native linear-light behavior
 TV/display-primary-aware target gamuts
 instrument-corrected display profiles
 Argyll CCXX / CCMX / CCSS colorimeter correction through spotread -X
+per-emitter spectral reports, CRI, TM-30, TLCI, and related diagnostics
 capture-cloud correction
 arbitrary emitter profiles
 strict and overdrive multi-emitter modes
@@ -436,6 +519,7 @@ rgbw_lut_builder/
   model/          # RGB/RGBW/WX/simplex/topology/gamut logic
   response/       # channel response providers and emitter profiles
   captures/       # capture schemas/loaders/UDP/spotread protocol
+  profiling/      # instruments, CCXX correction, SPD records, CRI/TM-30 reports
   correction/     # pass/fail dictionaries, residuals, measured simplex correction
   verify/         # model-vs-capture metrics and reports
   output/         # RGB/RGBW/channels/TemporalBFI/binary/coefficient exports

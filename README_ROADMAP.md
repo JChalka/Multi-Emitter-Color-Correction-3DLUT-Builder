@@ -125,6 +125,73 @@ measurement geometry, instrument, spotread mode, or high-W/multi-emitter
 spectral content changes enough that the old correction may no longer describe
 the current setup.
 
+---
+
+## Spectral characterization and lighting-quality reports
+
+The roadmap should also track deeper spectral analysis now that the workflow has
+a spectrophotometer path. This is separate from the core LUT solve: LUT building
+mainly needs corrected XYZxyY, while spectral reports need actual SPD samples.
+
+Target behavior:
+
+```text
+spectrophotometer SPD capture
+→ per-emitter / mixed-family spectral record
+→ derived colorimetry and lighting-quality metrics
+→ HTML / CSV / JSON reports
+→ optional profile metadata used by verifier and documentation
+```
+
+Initial report scope:
+
+```text
+per-emitter stats:
+    SPD range/step, peak wavelength, dominant wavelength, centroid wavelength,
+    FWHM, x/y, u'/v', CCT/Duv where meaningful, luminance/radiometric metadata
+
+CRI / CIE 13.3:
+    Ra, Ri values, and common R9/R12-style checks
+
+ANSI/IES TM-30:
+    Rf, Rg, hue-bin data, local chroma/hue shifts, and color-vector graphic data
+
+additional optional standards:
+    CIE 224-style fidelity metrics
+    TLCI for camera/video lighting workflows
+    SSI-style spectral similarity against a selected reference
+    LM-79-style photometric/colorimetric summary fields for SSL-style reports
+```
+
+Roadmap ownership:
+
+```text
+rgbw_lut_builder/profiling/
+    SPD capture records, Argyll CCXX wrapper metadata, spectral report builders,
+    CRI/TM-30/TLCI/SSI calculation adapters, and validation summaries
+
+rgbw_lut_builder/captures/
+    spectro SPD capture schemas and links between SPD records and XYZxyY rows
+
+rgbw_lut_builder/verify/
+    report surfaces that can link normal verifier residuals to spectral metrics
+
+host calibration GUI:
+    per-emitter spectral capture plans, report generation buttons,
+    and HTML/CSV/JSON report viewers
+```
+
+Implementation rule:
+
+```text
+spectral reports are profile diagnostics, not required solve inputs.
+Corrected XYZxyY remains the normal builder/verifier path.
+SPD-dependent metrics should be emitted only when a spectro capture is available.
+```
+
+This lets the project serve both calibration users and users who want deeper
+lighting-analysis information about their LED/wallwash setup.
+
 ## Current codebase status
 
 The future standalone repository should preserve and refactor existing infrastructure rather than rebuilding everything from scratch.
@@ -944,6 +1011,8 @@ display_profile
 instrument_profile_id
 instrument_correction_profile_id
 measurement_correction_policy
+spectral_report_id
+lighting_report_standards
 build_mode
 response_provider
 wx_mode
@@ -997,6 +1066,10 @@ instrument_correction_id
 measurement_correction_applied
 raw_XYZxyY_available
 corrected_XYZxyY_available
+spectral_measurement_id when available
+spectral_report_id when available
+cri_available
+tm30_available
 ```
 
 This prevents Rec.709, Rec.2020, native, linear, baked-transfer, strict, WX, and multi-emitter results from being conflated in the correction dictionary.
@@ -1058,6 +1131,13 @@ rgbw_lut_builder/
       paired_capture.py
       validation.py
       display_profile.py
+      spectral_measurements.py
+      spectral_reports.py
+      cri.py
+      tm30.py
+      tlci.py
+      ssi.py
+      lm79_summary.py
 
     correction/
       residuals.py
@@ -1112,6 +1192,8 @@ rgbw_lut_builder/
     profile_instrument.py
     make_argyll_ccxx.py
     validate_instrument_profile.py
+    generate_spectral_report.py
+    measure_emitter_spd.py
     run_live_capture.py
     convert_temporal_bfi_dataset.py
     generate_capture_plan.py
@@ -1120,6 +1202,7 @@ rgbw_lut_builder/
     capture_protocol.md
     display_profiling.md
     instrument_correction.md
+    spectral_reporting.md
     temporal_bfi_dataset.md
     lut_format.md
     migration_from_temporalbfi.md
@@ -1155,6 +1238,7 @@ split RGB-only and RGBW topology models cleanly
 replace hardcoded ramp arrays with response providers
 add display/instrument profiling and spectro-derived colorimeter correction artifacts
 prefer Argyll ccxxmake-generated CCMX/CCSS artifacts before introducing custom correction formats
+add spectro-derived per-emitter spectral reports, CRI, TM-30, TLCI, SSI, and LM-79-style summaries
 make pass/fail dictionary first-class
 add WX mode taxonomy: strict_subgamut, wx_radial_virtual, wx_virtual_axis_maxbright, wx_lp_legacy
 add emitter classification for inner / outer / edge emitters
@@ -1403,6 +1487,18 @@ Use the roadmap rows below for task-level status and ownership, then use the fun
 | support spectral / CCSS-style correction metadata | planned | Future spectral artifact loader/exporter -> `rgbw_lut_builder/profiling/spectral_correction.py` | [Display profiling and instrument correction](#correction-artifacts) | Prefer Argyll `.ccss` when available; metadata should allow spectro-derived spectral sample corrections without changing capture schemas. |
 | apply instrument correction in capture loaders | planned | Capture loaders and response providers -> `rgbw_lut_builder/captures/loaders.py`, `rgbw_lut_builder/response/*` | [Display profiling and instrument correction](#host-gui--capture-workflow) | Raw XYZxyY must be preserved; corrected XYZxyY becomes the default measurement used by builder/verifier when a valid correction profile is attached. |
 | add verifier raw-vs-corrected diagnostics | planned | Verifier/report surfaces -> `rgbw_lut_builder/verify/reports.py` and host calibration GUI verifier | [Display profiling and instrument correction](#host-gui--capture-workflow) | Reports should show whether correction was applied and allow before/after error summaries for the correction profile. |
+
+
+### Phase 3B: spectral characterization and lighting-quality reports
+
+| Roadmap item | Status | Move target / source | Math / prototype | Pinned work |
+| --- | --- | --- | --- | --- |
+| add SPD capture schema and per-emitter spectral records | planned | Spectro capture data -> `rgbw_lut_builder/profiling/spectral_measurements.py` and `rgbw_lut_builder/captures/schemas.py` | [Spectral characterization and color-rendition reports](README_MATH_MODEL.md#15-spectral-characterization-and-color-rendition-reports) | Store wavelength/power arrays, instrument id, correction id, output tuple, active channel family, geometry id, and derived XYZxyY. |
+| add CRI / CIE 13.3 report generation | planned | Spectral metrics -> `rgbw_lut_builder/profiling/cri.py` and `rgbw_lut_builder/profiling/spectral_reports.py` | [Spectral characterization and color-rendition reports](README_MATH_MODEL.md#15-spectral-characterization-and-color-rendition-reports) | Emit Ra, Ri values, common R9/R12 checks, per-emitter summaries, and mixed-family reports. |
+| add ANSI/IES TM-30 report generation | planned | TM-30 adapter -> `rgbw_lut_builder/profiling/tm30.py` and report views | [Spectral characterization and color-rendition reports](README_MATH_MODEL.md#15-spectral-characterization-and-color-rendition-reports) | Emit Rf, Rg, hue-bin data, local chroma/hue shifts, and color-vector graphic data where a compliant implementation/library is available. |
+| add optional TLCI / SSI / LM-79-style summaries | planned | Optional report adapters -> `rgbw_lut_builder/profiling/{tlci,ssi,lm79_summary}.py` | [Spectral characterization and color-rendition reports](README_MATH_MODEL.md#15-spectral-characterization-and-color-rendition-reports) | Keep these as optional diagnostics for camera/video and SSL-style reporting; do not make them required for LUT generation. |
+| expose spectral reports in host GUI and verifier artifacts | planned | Host GUI + report writer -> `rgbw_lut_builder/verify/reports.py` and calibration GUI report surfaces | [Spectral characterization and color-rendition reports](README_MATH_MODEL.md#15-spectral-characterization-and-color-rendition-reports) | Export HTML/CSV/JSON reports and link verifier rows to spectral measurement ids when available. |
+
 
 ### Phase 4: model-vs-capture diagnostics
 

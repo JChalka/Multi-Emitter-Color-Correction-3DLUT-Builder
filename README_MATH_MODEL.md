@@ -1691,7 +1691,175 @@ coefficient_tetra size ≈ (grid_size - 1)^3 * 6 tetra * 4 terms * 4 channels * 
 
 ---
 
-## 15. Future physical-solution policy axis
+
+## 15. Spectral characterization and color-rendition reports
+
+Spectral reporting is a diagnostic/profile layer. It should not be required for
+the core LUT solve, but it becomes available when a spectrophotometer capture
+provides a spectral power distribution rather than only XYZxyY.
+
+Important separation:
+
+```text
+XYZxyY / Lab / LCh / Luv:
+    usable from colorimeter or corrected colorimeter measurements
+    normal builder/verifier correction path
+
+SPD:
+    requires spectrophotometer data
+    required for CRI, TM-30, TLCI, SSI, and deeper emitter analysis
+```
+
+### Spectral measurement record
+
+A spectral record should be tied to the same output tuple and active family
+metadata used elsewhere:
+
+```text
+SpectralMeasurement:
+    measurement_id
+    display_profile_id
+    emitter_profile_id
+    instrument_id
+    instrument_correction_id
+    geometry_id
+    output_tuple
+    active_channel_family
+    model_family
+    wavelength_nm[]
+    spectral_power[]
+    integration_time / spotread options
+    raw_or_corrected_policy
+    derived_XYZxyY
+    derived_CCT_Duv when meaningful
+```
+
+Single-emitter records should be captured for every physical channel:
+
+```text
+R, G, B, W, CW, WW, amber, violet, yellow, etc.
+```
+
+Mixed-family records should be optional but useful:
+
+```text
+neutral ramp
+strict sub_gamut white / near-white families
+WX / overdrive high-W families
+RGB+CCT inner-anchor blends
+known verifier pass/fail stress patches
+representative user-selected output tuples
+```
+
+### Per-emitter spectral statistics
+
+Basic per-emitter statistics:
+
+```text
+peak wavelength
+dominant wavelength
+centroid wavelength
+FWHM
+spectral bandwidth / shape notes
+chromaticity x/y and u'/v'
+CCT and Duv when the emitter or mix is white-like enough
+relative or absolute Y / luminous flux proxy when calibrated
+```
+
+These values help explain why two emitters with similar xy can behave
+differently under a colorimeter, why an Argyll CCXX correction is needed, and why
+some multi-emitter regions may have different measured residuals even when the
+topology solve is numerically valid.
+
+### CRI / CIE 13.3 report
+
+When an SPD is available, the report layer may compute CIE CRI-style values:
+
+```text
+CRIReport:
+    Ra
+    Ri[1..N]
+    R9 and other commonly inspected special indices
+    reference illuminant / CCT region
+    warning flags for low-CCT/high-CCT/low-Y/out-of-scope use
+```
+
+CRI remains useful because it is widely recognized, but it should not be the only
+quality metric for LED and multi-emitter systems.
+
+### ANSI/IES TM-30 report
+
+TM-30 should be treated as the preferred richer color-rendition report when a
+compliant implementation is available:
+
+```text
+TM30Report:
+    Rf
+    Rg
+    color vector graphic data
+    hue-bin fidelity
+    hue-bin chroma shift
+    hue-bin hue shift
+    local chroma/fidelity tables
+```
+
+For this project, TM-30 is useful both per emitter and for mixed outputs:
+
+```text
+single white / CW / WW channels
+strict neutral and near-white solves
+WX / maxbright high-W outputs
+RGB+CCT blend paths
+user-selected ambient/wallwash operating points
+```
+
+### Optional report families
+
+Additional report adapters can be added behind optional dependencies:
+
+```text
+CIE 224-style fidelity:
+    optional CIE color-fidelity metric for scientific comparison.
+
+TLCI:
+    useful for camera/video-oriented lighting and wallwash setups.
+
+SSI:
+    useful when comparing an emitter/mix against a selected reference spectrum.
+
+LM-79-style summary:
+    useful report framing for SSL-style photometric/colorimetric measurements,
+    without claiming formal accredited LM-79 compliance.
+```
+
+### Report artifacts
+
+Spectral reports should be exported separately from LUT metadata but linkable
+from display/emitter profiles and verifier rows:
+
+```text
+SpectralReport:
+    report_id
+    display_profile_id
+    emitter_profile_id
+    geometry_id
+    instrument_id
+    spectral_measurement_ids
+    standards: cri | tm30 | tlci | ssi | lm79_summary | custom
+    per_emitter_results
+    mixed_family_results
+    warnings
+    generated_at
+```
+
+The builder may use these reports for human diagnostics and profile metadata,
+but the normal correction path should continue to operate on corrected XYZxyY,
+measured response providers, pass/fail dictionaries, and capture-cloud residuals.
+
+---
+
+
+## 16. Future physical-solution policy axis
 
 Strict sub-gamut and WX are not mutually exclusive models. They are different slices of a larger physical-solution space.
 
