@@ -384,7 +384,11 @@ active_channel_family metadata.
 The current model path has historically treated endpoint clipping as if the
 chromaticity-preserving full endpoint should be scaled back by the input/value
 axis. That is useful for smooth channel granularity, but it is a profile choice,
-not the only physically meaningful Y contract.
+not the only physically meaningful Y contract. This policy is not limited to
+`strict_rgbw_subgamut`: it applies to every direct topology solve, including
+native RGB outer-edge locks returned by `wx_lp_legacy`, `wx_radial_virtual`, and
+`wx_virtual_axis_maxbright`. Those dual-channel edge locks are not overdrive
+solves because no W/inner channel is available to blend into.
 
 The roadmap should expose this as an explicit builder/verifier policy:
 
@@ -408,7 +412,8 @@ rgbw_lut_builder/model/simplex.py
     shared endpoint-policy application for direct line/triangle/simplex solves
 
 rgbw_lut_builder/model/rgbw_model.py
-    RGBW strict/WX caller wiring and legacy behavior compatibility
+    RGBW strict/WX caller wiring, including native outer-edge locks inside WX
+    modes, and legacy behavior compatibility
 
 rgbw_lut_builder/model/topology.py
     policy metadata for topology decisions that can clip at boundaries
@@ -434,8 +439,10 @@ endpoint_scale_axis
 ```
 
 This policy applies most visibly to dual-channel / edge colors such as clipped
-yellow, but the same metadata should be available to RGB, strict RGBW, WX, and
-future multi-emitter direct-topology solves.
+yellow. It must be shared by RGB, strict RGBW, and the direct edge-lock paths
+inside WX modes; true WX interiors can remain explicit overdrive behavior. The
+same metadata should also be available to future multi-emitter direct-topology
+solves.
 
 
 ## Input gamuts and transfer handling

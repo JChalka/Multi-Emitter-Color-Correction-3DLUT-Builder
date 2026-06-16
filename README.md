@@ -168,7 +168,7 @@ It intentionally avoids arbitrary four-channel RGBW output.
 
 ### Luminance endpoint / clipping policy
 
-Strict topology defines which channels are allowed to participate. It does not, by itself, define what should happen when a target chromaticity and requested Y would force a participating channel past its available endpoint.
+Strict topology defines which channels are allowed to participate. It does not, by itself, define what should happen when a target chromaticity and requested Y would force a participating channel past its available endpoint. The same policy also applies to any direct edge-lock solve inside an overdrive family. For example, native `RG`, `RB`, and `BG` inputs remain dual-channel edge solves under `wx_lp_legacy`, `wx_radial_virtual`, and `wx_virtual_axis_maxbright`; those cases have no W/inner channel participating, so they are not overdrive solves.
 
 That behavior should be a profile-selected policy rather than an implicit physical rule:
 
@@ -206,7 +206,7 @@ rolloff_after_clip:
     retains usable gradation without silently redefining target Y everywhere.
 ```
 
-The builder should record this policy in LUT metadata, verifier reports, and correction dictionaries so measurements from Y-correct, rolloff, and endpoint-scaled cubes are not mixed.
+The builder should record this policy in LUT metadata, verifier reports, and correction dictionaries so measurements from Y-correct, rolloff, and endpoint-scaled cubes are not mixed. The policy should be evaluated at the direct-topology boundary layer before WX/interior overdrive logic is considered: true four-channel WX interiors can keep their selected overdrive scaling, while native outer-dual edge locks inside those modes must honor the same endpoint policy as strict sub-gamut.
 
 ### WX / white-overdrive
 

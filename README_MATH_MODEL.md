@@ -213,13 +213,13 @@ The output tuple is initialized as zero, then the solved components are inserted
 
 ### Brightness / endpoint policy
 
-A simplex solve may request a participating channel above full drive. Define:
+A simplex solve may request a participating channel above full drive. This can happen in strict sub-gamut, RGB-only, native outer-edge locks, and any WX mode that deliberately falls back to a direct single/dual RGB edge. It is not a WX/interior-overdrive-only issue. Define:
 
 ```math
 m = \max_i(t_i)
 ```
 
-The builder must not treat the response to `m > 1` as a fixed physical law. It is a **profile policy** because different applications may prefer different tradeoffs between target-Y correctness, chromaticity preservation, and post-clip channel granularity.
+The builder must not treat the response to `m > 1` as a fixed physical law. It is a **profile policy** because different applications may prefer different tradeoffs between target-Y correctness, chromaticity preservation, and post-clip channel granularity. The policy applies to direct topology solves regardless of the selected high-level model family. Native `RG`, `RB`, and `BG` edge locks inside `wx_lp_legacy`, `wx_radial_virtual`, or `wx_virtual_axis_maxbright` must use this same policy because those outputs contain no W channel and are not overdrive solves.
 
 Supported policy family:
 
@@ -305,7 +305,7 @@ endpoint_scale_axis:
     source value / max input channel / explicit Y scale, depending on profile
 ```
 
-Builder, verifier, and correction reports must use the same endpoint policy. Otherwise a verifier can incorrectly mark a LUT as failing only because expected Y/chroma was computed under a different endpoint contract.
+Builder, verifier, and correction reports must use the same endpoint policy. Otherwise a verifier can incorrectly mark a LUT as failing only because expected Y/chroma was computed under a different endpoint contract. Metadata should distinguish `endpoint_policy_applied=true` direct topology results from true WX/multi-emitter overdrive interiors where a different virtual-primary scaling policy may legitimately own the result.
 
 ---
 
@@ -638,6 +638,7 @@ All WX modes should preserve these invariants when requested:
 ```text
 native R / G / B identity
 native outer RG / RB / BG edge locking
+endpoint luminance policy on those native outer-edge locks
 low-Y collapse to fewer channels
 out-of-hull projection before solve
 verifier-known fail/pass override behavior
