@@ -211,27 +211,101 @@ t_a,t_b,t_c \ge -\epsilon
 
 The output tuple is initialized as zero, then the solved components are inserted at their physical channel positions.
 
-### Brightness normalization
+### Brightness / endpoint policy
 
-If any solved channel exceeds full drive:
+A simplex solve may request a participating channel above full drive. Define:
 
 ```math
 m = \max_i(t_i)
 ```
 
-and:
+The builder must not treat the response to `m > 1` as a fixed physical law. It is a **profile policy** because different applications may prefer different tradeoffs between target-Y correctness, chromaticity preservation, and post-clip channel granularity.
 
-```math
-m > 1
+Supported policy family:
+
+```text
+y_correct_clip:
+    keep the absolute target-Y solve as the contract and clip physical channels
+    only where required. This preserves Y intent until the device cannot follow
+    it, then accepts the resulting clipping / residual error.
+
+rolloff_after_clip:
+    follow the y_correct_clip behavior near the endpoint but introduce a smooth
+    knee after the clipping point. The goal is to avoid a hard plateau while
+    still tracking the physical clipping boundary.
+
+scale_to_full_endpoint:
+    legacy/current behavior. First derive the chromaticity-preserving endpoint
+    tuple, then scale that endpoint by the source/value axis. This preserves
+    smooth channel granularity but changes the target-Y contract.
 ```
 
-then normalize all participating channels:
+For an unclipped solve:
 
 ```math
-t_i' = \frac{t_i}{m}
+m \le 1 \quad \Rightarrow \quad f_i = t_i
 ```
 
-This preserves target chromaticity while reducing luminance to the maximum achievable value inside the selected physical topology.
+For the legacy endpoint-scaling behavior:
+
+```math
+\hat{t}_i = \frac{t_i}{\max(1,m)}
+```
+
+then, for a source/value scale `v`:
+
+```math
+f_i = v\hat{t}_i
+```
+
+So a half-scale yellow whose chromaticity endpoint is:
+
+```text
+R = 65535, G = 28335
+```
+
+becomes approximately:
+
+```text
+R = 32767, G = 14167
+```
+
+under `scale_to_full_endpoint`.
+
+For a Y-correct clipping policy, the final tuple is closer to:
+
+```math
+f_i = \min(t_i, 1)
+```
+
+with the residual recorded as a real target error rather than hidden by endpoint scaling.
+
+A rolloff policy should be represented as a smooth blend/compression between those two endpoints:
+
+```math
+\alpha = smoothstep(knee_{start}, knee_{end}, m)
+```
+
+```math
+f_i = (1-\alpha)f_{clip,i} + \alpha f_{endpoint,i}
+```
+
+or an equivalent monotonic compression curve. The exact curve is profile-defined, but it must preserve deterministic ordering and avoid discontinuities at the knee.
+
+Metadata should record:
+
+```text
+endpoint_luminance_policy:
+    y_correct_clip | rolloff_after_clip | scale_to_full_endpoint
+
+endpoint_rolloff_knee:
+    start/end or equivalent curve parameters when rolloff is used
+
+endpoint_scale_axis:
+    source value / max input channel / explicit Y scale, depending on profile
+```
+
+Builder, verifier, and correction reports must use the same endpoint policy. Otherwise a verifier can incorrectly mark a LUT as failing only because expected Y/chroma was computed under a different endpoint contract.
 
 ---
 
@@ -429,7 +503,7 @@ function solve_rgb_only(source_rgb):
     X_t = source_rgb_to_led_absolute_XYZ(source_rgb)
     X_t = project_to_RGB_hull_if_needed(X_t)
     t = solve_xyz([P_R, P_G, P_B], X_t)
-    t = normalize_if_any_channel_exceeds_one(t)
+    t = apply_endpoint_policy(t, source_rgb, endpoint_policy)
     return [R=t_R, G=t_G, B=t_B]
 ```
 
@@ -482,11 +556,11 @@ function solve_strict_rgbw(source_rgb):
         if xy_t is inside triangle(subgamut.xy):
             t = solve_xyz(subgamut.P, X_t)
             if t is non-negative:
-                return expand_and_normalize(t, subgamut.channels)
+                return expand_and_apply_endpoint_policy(t, subgamut.channels, endpoint_policy)
 
     # fallback for numerical edge cases or out-of-hull residual projection
     best = argmin_over_subgamuts(||P_subgamut * nnls(P_subgamut, X_t) - X_t||)
-    return expand_and_normalize(best.t, best.channels)
+    return expand_and_apply_endpoint_policy(best.t, best.channels, endpoint_policy)
 ```
 
 ### Function form
@@ -509,14 +583,37 @@ The strict solve is:
 t_{g^*} = P_{g^*}^{-1} X_t
 ```
 
-and the physical RGBW tuple is:
+and the physical RGBW tuple is policy-dependent.
+
+For the legacy `scale_to_full_endpoint` policy:
 
 ```math
 f_i =
 \begin{cases}
-\frac{t_i}{\max(1, \max_j t_j)}, & i \in g^* \\
+v\frac{t_i}{\max(1, \max_j t_j)}, & i \in g^* \\
 0, & i \notin g^*
 \end{cases}
+```
+
+where `v` is the selected source/value scale.
+
+For `y_correct_clip`:
+
+```math
+f_i =
+\begin{cases}
+\min(t_i, 1), & i \in g^* \\
+0, & i \notin g^*
+\end{cases}
+```
+
+`rolloff_after_clip` uses the same direct topology but replaces the hard endpoint with a smooth knee between the Y-correct clipped tuple and the endpoint-scaled tuple.
+
+The strict invariant is the topology, not a single endpoint-luminance behavior:
+
+```text
+strict mode = one legal local topology
+endpoint behavior = profile-selected Y / clipping / granularity policy
 ```
 
 ---

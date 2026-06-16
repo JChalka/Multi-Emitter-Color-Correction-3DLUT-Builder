@@ -355,6 +355,9 @@ rgbw_lut_builder/model/simplex.py
 rgbw_lut_builder/model/topology.py
     legal candidate generation, strict-vs-overdrive guards, overlap policy owner
 
+rgbw_lut_builder/model/simplex.py / rgbw_lut_builder/model/rgbw_model.py
+    endpoint luminance / clipping policy application for direct solves
+
 rgbw_lut_builder/model/layered_simplex.py
     explicit overdrive / virtual KnownPoint layer composition
 
@@ -375,6 +378,65 @@ strict and overdrive outputs must not be mixed in the same feedback bucket;
 verifier reports and correction dictionaries must preserve model_family and
 active_channel_family metadata.
 ```
+
+## Endpoint luminance / clipping policy
+
+The current model path has historically treated endpoint clipping as if the
+chromaticity-preserving full endpoint should be scaled back by the input/value
+axis. That is useful for smooth channel granularity, but it is a profile choice,
+not the only physically meaningful Y contract.
+
+The roadmap should expose this as an explicit builder/verifier policy:
+
+```text
+y_correct_clip:
+    preserve target-Y intent until the device clips, then report the residual.
+
+rolloff_after_clip:
+    use a smooth knee after the clipping point so post-clip values retain
+    gradation instead of becoming a hard plateau.
+
+scale_to_full_endpoint:
+    legacy/current behavior; scale the chromaticity-preserving endpoint by the
+    source/value axis for smoother channel resolution.
+```
+
+Implementation ownership:
+
+```text
+rgbw_lut_builder/model/simplex.py
+    shared endpoint-policy application for direct line/triangle/simplex solves
+
+rgbw_lut_builder/model/rgbw_model.py
+    RGBW strict/WX caller wiring and legacy behavior compatibility
+
+rgbw_lut_builder/model/topology.py
+    policy metadata for topology decisions that can clip at boundaries
+
+rgbw_lut_builder/build/model_only.py
+    CLI arguments, summary JSON, and backwards-compatible defaults
+
+rgbw_lut_builder/verify/reports.py
+    expected-Y/chroma reporting under the same endpoint policy used by the LUT
+
+rgbw_lut_builder/correction/pass_fail_dictionary.py
+    include endpoint policy in feedback keys so different policies do not share
+    pass/fail buckets
+```
+
+Required metadata:
+
+```text
+endpoint_luminance_policy
+endpoint_rolloff_knee
+endpoint_rolloff_strength
+endpoint_scale_axis
+```
+
+This policy applies most visibly to dual-channel / edge colors such as clipped
+yellow, but the same metadata should be available to RGB, strict RGBW, WX, and
+future multi-emitter direct-topology solves.
+
 
 ## Input gamuts and transfer handling
 
@@ -1011,6 +1073,10 @@ display_profile
 instrument_profile_id
 instrument_correction_profile_id
 measurement_correction_policy
+endpoint_luminance_policy
+endpoint_rolloff_knee
+endpoint_rolloff_strength
+endpoint_scale_axis
 spectral_report_id
 lighting_report_standards
 build_mode
@@ -1066,6 +1132,10 @@ instrument_correction_id
 measurement_correction_applied
 raw_XYZxyY_available
 corrected_XYZxyY_available
+endpoint_luminance_policy
+endpoint_rolloff_knee
+endpoint_rolloff_strength
+endpoint_scale_axis
 spectral_measurement_id when available
 spectral_report_id when available
 cri_available
@@ -1462,6 +1532,7 @@ Use the roadmap rows below for task-level status and ownership, then use the fun
 | keep LP max-white as wx_lp_legacy reference path | done | Legacy LP/max-white WX solve -> `rgbw_lut_builder/model/wx_modes.py` and `rgbw_lut_builder/model/rgbw_model.py` | [Reference wx_lp_legacy](README_MATH_MODEL.md#10-reference-wx-mode-wx_lp_legacy) | `wx_lp_legacy` remains a canonical selectable mode through `rgbw_lut_builder/model/wx_modes.py` and the package RGBW model surface. |
 | add wx_virtual_axis_maxbright as a first-class high-brightness WX path | done | Legacy virtual-axis WX solve -> `rgbw_lut_builder/model/wx_modes.py` and `rgbw_lut_builder/model/rgbw_model.py` | [Max-brightness wx_virtual_axis_maxbright](README_MATH_MODEL.md#11-max-brightness-wx-mode-wx_virtual_axis_maxbright) | `wx_virtual_axis_maxbright` is normalized as a first-class mode and smoke-validated through `tools/build_lut.py model-only build-cube --model-family rgbw --method wx --wx-mode wx_virtual_axis_maxbright`. |
 | share gamut transforms and hull projection | done | Legacy conversion/projection/barycentric helpers -> `rgbw_lut_builder/model/{gamuts,projection,simplex,topology}.py` | [Source gamut conversion](README_MATH_MODEL.md#source-gamut-conversion), [Common simplex solve](README_MATH_MODEL.md#2-common-simplex-solve), [Out-of-hull projection](README_MATH_MODEL.md#3-out-of-hull-projection) | `rgbw_lut_builder/model/projection.py` now owns strict LED-hull projection, `rgbw_lut_builder/model/simplex.py` owns the shared barycentric/NNLS/chromaticity primitives, and the package RGB/RGBW solvers use those owners directly. |
+| add selectable endpoint luminance / clipping policy | active | Current endpoint scaling behavior -> `rgbw_lut_builder/model/simplex.py`, `rgbw_lut_builder/model/rgbw_model.py`, `rgbw_lut_builder/build/model_only.py`, and verifier metadata | [Brightness / endpoint policy](README_MATH_MODEL.md#brightness--endpoint-policy) | Current behavior should become an explicit `scale_to_full_endpoint` compatibility mode. Add `y_correct_clip` and `rolloff_after_clip` modes, CLI arguments, summary JSON fields, verifier metadata, and pass/fail dictionary separation. |
 | share tetrahedral LUT sampling assumptions | planned | Planned owner is `rgbw_lut_builder/model/interpolation/*` plus `rgbw_lut_builder/output/coefficient_cube_export.py` and runtime samplers under `rgbw_lut_builder/runtime/` | [Tetrahedral LUT interpolation](README_MATH_MODEL.md#14-tetrahedral-lut-interpolation) | The package targets exist as placeholders; candidate source/build surfaces are tracked in `docs/project_function_tree.md`. |
 | add output-family metadata everywhere | active | Current summary metadata in `rgbw_lut_builder/build/model_only.py` -> propagate into `rgbw_lut_builder/output/*` and `rgbw_lut_builder/verify/reports.py` | n/a | Package-owned model cube summaries now write `output_family` and `output_channels` in `rgbw_lut_builder/build/model_only.py`, but the same metadata still needs to be propagated consistently across all builders/verifiers/exports. |
 

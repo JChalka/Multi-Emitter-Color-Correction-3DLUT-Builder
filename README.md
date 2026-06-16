@@ -109,6 +109,7 @@ linear-light LED LUT contracts
 strict RGB/RGBW topology legality
 shared builder/verifier out-of-hull projection
 explicit strict vs WX / overdrive model families
+selectable endpoint / luminance-clipping policy
 capture-cloud local simplex correction
 instrument-corrected measurement profiles
 arbitrary emitter packages and channel counts
@@ -164,6 +165,48 @@ RGW, RBW, BGW
 ```
 
 It intentionally avoids arbitrary four-channel RGBW output.
+
+### Luminance endpoint / clipping policy
+
+Strict topology defines which channels are allowed to participate. It does not, by itself, define what should happen when a target chromaticity and requested Y would force a participating channel past its available endpoint.
+
+That behavior should be a profile-selected policy rather than an implicit physical rule:
+
+```text
+y_correct_clip:
+    preserve the requested Y contract as far as possible and accept hard clipping
+    or chromaticity/Y error once a channel endpoint is reached.
+
+rolloff_after_clip:
+    follow the clipping/Y-correct result near the limit, then apply a smooth
+    compression/rolloff so values after the clipping point still have usable
+    channel granularity instead of flattening into a hard plateau.
+
+scale_to_full_endpoint:
+    legacy/current behavior. Treat the clipped full-endpoint tuple as the
+    chromaticity anchor and scale it by the input/value axis. This preserves
+    smooth channel granularity but is a profile choice, not a physically strict
+    target-Y contract.
+```
+
+Example:
+
+```text
+half-scale yellow target
+raw chromaticity solve clips to:  R=65535, G=28335
+
+scale_to_full_endpoint:
+    output becomes roughly:       R=32767, G=14167
+
+y_correct_clip:
+    keeps the absolute solve/clip behavior instead of rescaling the endpoint.
+
+rolloff_after_clip:
+    transitions between those behaviors with a smooth knee so the clipped region
+    retains usable gradation without silently redefining target Y everywhere.
+```
+
+The builder should record this policy in LUT metadata, verifier reports, and correction dictionaries so measurements from Y-correct, rolloff, and endpoint-scaled cubes are not mixed.
 
 ### WX / white-overdrive
 
