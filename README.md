@@ -226,6 +226,41 @@ wx_lp_legacy                 direct LP max-white endpoint / reference model
 
 These modes are especially relevant for ambilight / wallwash / HDR-style usage where higher W participation and higher brightness may be useful, as long as verifier data shows the residuals are predictable and correctable.
 
+
+### Interleaved RGB / assisted Y-linear solve
+
+A planned experimental solve family should also allow the builder to treat a
+plain RGB or chromatic-only solve as a valid candidate alongside the selected
+RGBW, CCT, strict multi-emitter, or overdrive model.
+
+The reason is luminance granularity. In common RGBW strips, the W channel can be
+far brighter than the R/G/B emitters. RGBW-only solves are efficient and bright,
+but when every valid candidate contains W, small code changes in W can jump Y
+more than the visual target wants. A no-W RGB solve may use weaker emitters and
+therefore fill intermediate Y steps that sit between two W-assisted output
+states.
+
+Conceptually:
+
+```text
+target xy/Y
+→ solve RGB / chromatic-only candidate when target xy is inside that gamut
+→ solve strict RGBW / WX / RGB+CCT / 5+ emitter candidate
+→ choose or interleave candidates by Y error, chromaticity error, quantization
+  step size, channel headroom, profile policy, and hysteresis
+```
+
+For RGBW this means the RGB triangle is still considered a legal no-W solve
+region instead of always forcing the target through an RGW/RBW/BGW or WX result.
+For larger emitter packages, the no-inner / no-W candidate may be a chromatic
+outer-hull solve that uses RGB, RGBY, RGBV, RGBCMY, or another profile-declared
+set of weaker chromatic emitters.
+
+This mode is not the same as unconstrained optimization. Each LUT node still
+chooses a legal candidate family, and metadata should record whether the final
+node came from RGB/no-W, strict assisted sub-gamut, WX, or multi-emitter
+overdrive.
+
 ### Multi-emitter sub-gamut and overdrive
 
 The roadmap extends beyond RGBW. Future profiles can describe packages such as:

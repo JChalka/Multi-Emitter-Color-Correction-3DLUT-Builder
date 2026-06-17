@@ -301,6 +301,11 @@ wx_virtual_axis_maxbright:
 wx_lp_legacy:
     LP max-white reference behavior; compatibility/reference mode.
 
+interleaved_rgb_assisted_y_linear:
+    planned experimental candidate-selection mode. Treat RGB/chromatic-only
+    solves and assisted RGBW/CCT/5+ solves as separate legal candidates, then
+    interleave by Y linearity, quantization step, residual, and profile policy.
+
 strict_multi_emitter_subgamut:
     5+ emitter direct topology solve. Build legal lines/triangles/simplexes from
     outer, edge, and inner emitters; choose one direct candidate at a time.
@@ -354,6 +359,10 @@ rgbw_lut_builder/model/simplex.py
 
 rgbw_lut_builder/model/topology.py
     legal candidate generation, strict-vs-overdrive guards, overlap policy owner
+
+rgbw_lut_builder/model/interleaved_y.py
+    planned RGB/chromatic-only vs assisted solve candidate selection for Y-linear
+    granularity and no-W / W-assisted interleave reports
 
 rgbw_lut_builder/model/simplex.py / rgbw_lut_builder/model/rgbw_model.py
     endpoint luminance / clipping policy application for direct solves
@@ -439,6 +448,81 @@ endpoint_scale_axis
 This policy applies most visibly to dual-channel / edge colors such as clipped
 yellow, but the same metadata should be available to RGB, strict RGBW, WX, and
 future multi-emitter direct-topology solves.
+
+
+## Interleaved RGB / assisted Y-linear solve mode
+
+A planned experimental mode should expose the RGB/no-W solve as a normal
+candidate alongside the selected assisted model. This matters because the W,
+CW, WW, or other inner emitters can be much brighter than the chromatic
+emitters. They are efficient, but their large Y-per-code step can reduce visible
+luminance granularity even when the LUT uses effective 16-bit output or a
+TemporalBFI response backend.
+
+Target behavior:
+
+```text
+build candidate A:
+    RGB-only or chromatic-only solve, if target xy is inside that candidate hull
+
+build candidate B:
+    strict RGBW / WX / RGB+CCT / 5+ assisted solve
+
+rank/interleave:
+    choose the candidate with better target-Y tracking, chromaticity residual,
+    local Y quantization step, channel headroom, response confidence, and
+    profile-selected hysteresis
+```
+
+For RGBW, candidate A is the normal RGB triangle without W. For multi-emitter
+profiles, candidate A may be a profile-declared chromatic hull such as RGBY,
+RGBV, RGBCMY, or another no-inner/no-white topology that can solve the target xy
+using weaker emitters. Candidate B is the selected assisted model: strict
+sub_gamut, WX, CCT, layered overdrive, or virtual-primary policy.
+
+The goal is not to replace W-assisted solving. The goal is to fill Y gaps where
+W-assisted output jumps from one measurable luminance level to another and a
+weaker RGB/chromatic candidate can land between them.
+
+Roadmap ownership:
+
+```text
+rgbw_lut_builder/model/interleaved_y.py
+    candidate generation, score policy, and node selection
+
+rgbw_lut_builder/model/rgb_model.py
+    RGB/chromatic-only candidate generation and direct solve metadata
+
+rgbw_lut_builder/model/rgbw_model.py / wx_modes.py / layered_simplex.py
+    assisted candidate generation under the selected profile mode
+
+rgbw_lut_builder/response/base.py
+    local Y-per-code / quantization-step estimates from channel response curves
+
+rgbw_lut_builder/verify/reports.py
+    selected candidate family, candidate Y error, candidate xy residual,
+    quantization-step diagnostics, and topology-switch heatmaps
+```
+
+Required metadata:
+
+```text
+interleaved_y_mode
+interleaved_chromatic_candidate_family
+interleaved_assisted_candidate_family
+interleaved_selection_policy
+interleaved_y_quantization_metric
+interleaved_hysteresis_policy
+selected_candidate_family
+candidate_y_error
+candidate_xy_error
+candidate_y_step_estimate
+```
+
+The verifier and pass/fail dictionary must keep interleaved candidate provenance.
+An RGB/no-W pass should not silently validate a W-assisted candidate, and a
+W-assisted fail should not block a chromatic-only candidate that solves the same
+input with a different output tuple.
 
 
 ## Input gamuts and transfer handling

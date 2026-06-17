@@ -1717,6 +1717,193 @@ respect thermal/current budgets and user brightness policy
 ```
 
 
+
+### 13.3 Interleaved RGB / assisted Y-linear solve
+
+An additional planned solve family is an interleaved candidate-selection mode.
+It treats a no-W RGB or chromatic-only solve as a valid candidate alongside the
+selected assisted model:
+
+```text
+candidate A: RGB / chromatic-only direct solve
+candidate B: strict RGBW, WX, RGB+CCT, multi-emitter strict, or overdrive solve
+selection:   choose the candidate that best tracks xy/Y and useful Y granularity
+```
+
+The motivation is Y quantization and channel granularity. In many RGBW strips,
+the W emitter is far brighter than the R/G/B emitters. A W-assisted solve can be
+more power efficient and can reach higher Y, but a one-code or one-response-step
+change in W may move luminance farther than the target ladder wants. A no-W RGB
+solve uses weaker emitters and may fill intermediate Y levels that sit between
+W-assisted steps.
+
+This remains a constrained model. It is not an unconstrained RGBW optimizer. Each candidate is solved through its own legal topology, and the final node records which candidate family won.
+
+#### Candidate set
+
+For a target `X_t`, `xy_t`, and requested luminance `Y_t`, generate:
+
+```text
+C_rgb:
+    direct RGB / chromatic-only candidate when xy_t lies inside that candidate
+    hull and the solve is physically valid
+
+C_assisted:
+    selected RGBW/CCT/5+ model candidate, such as strict sub_gamut,
+    wx_radial_virtual, wx_virtual_axis_maxbright, wx_lp_legacy,
+    strict_multi_emitter_subgamut, or multi_emitter_overdrive
+```
+
+For RGBW:
+
+```text
+C_rgb = solve_xyz([R, G, B], X_t)
+C_assisted = selected RGBW strict/WX candidate
+```
+
+For multi-emitter packages, the chromatic-only candidate can be profile-defined:
+
+```text
+RGB
+RGBY
+RGBV
+RGBCMY
+outer-hull-only candidate set
+other no-inner/no-W chromatic simplexes declared by the emitter profile
+```
+
+The chromatic-only candidate is valid only where it can solve the target xy and
+Y with acceptable residual or a profile-defined projection. If the target falls
+outside the chromatic-only hull, this mode falls back to the assisted candidate.
+
+#### Y-step / granularity metric
+
+Each candidate should expose an estimated local Y step. A simple first metric is
+based on active-channel full-drive Y and output quantization:
+
+```math
+\Delta Y_{q,i} \approx \frac{P_{i,Y}}{Q_i}
+```
+
+where `Q_i` is the effective code depth for channel `i` after any TemporalBFI,
+True16, or chipset response mapping.
+
+For a candidate output tuple `f`, the local luminance quantum can be estimated
+from the active channels:
+
+```text
+candidate_y_step = min useful local Y step from active channels
+```
+
+or from a response provider:
+
+```text
+candidate_y_step = local derivative / inverse-response step around f
+```
+
+W, CW, and WW often have much larger `P_Y` than R/B and usually larger than G.
+So a W-assisted candidate may have better efficiency but worse fine Y spacing.
+The RGB/chromatic-only candidate may have lower maximum Y but better intermediate
+Y placement.
+
+#### Selection score
+
+A first profile score can be:
+
+```text
+score(candidate) =
+    w_xy      * xy_error(candidate, target)
+  + w_Y       * abs(Y_candidate - Y_t)
+  + w_step    * candidate_y_step
+  + w_headroom* clipping_or_headroom_penalty
+  + w_switch  * topology_switch_penalty
+  + w_trust   * measured_response_uncertainty
+```
+
+Lower score wins. Useful policies:
+
+```text
+y_linear_first:
+    prioritize target-Y tracking and local Y-step quality.
+
+efficiency_first:
+    prefer W-assisted output unless RGB/chromatic-only materially improves Y
+    placement or avoids a visible luminance jump.
+
+hysteresis_locked:
+    require a minimum improvement before switching candidate family, preventing
+    alternating RGB/W-assisted choices across neighboring LUT nodes.
+
+measured_response_first:
+    prefer the candidate family with better verifier/pass/fail or response-curve
+    evidence for the current hue/Y bucket.
+```
+
+#### Algorithm
+
+```text
+function solve_interleaved_y_linear(source_rgb, profile, assisted_mode, policy):
+    X_t  = source_rgb_to_led_absolute_XYZ(source_rgb)
+    xy_t = XYZ_to_xy(X_t)
+    Y_t  = X_t.Y
+
+    candidates = []
+
+    rgb_candidate = solve_chromatic_only_candidate(X_t, xy_t, profile)
+    if rgb_candidate is valid:
+        candidates.append(rgb_candidate.with_family("chromatic_only"))
+
+    assisted_candidate = solve_selected_assisted_model(X_t, xy_t,
+                                                       assisted_mode,
+                                                       profile)
+    if assisted_candidate is valid:
+        candidates.append(assisted_candidate.with_family("assisted"))
+
+    for candidate in candidates:
+        candidate.xy_error = compute_projected_xy_error(candidate, target)
+        candidate.Y_error = abs(candidate.predicted_Y - Y_t)
+        candidate.y_step = estimate_local_Y_quantum(candidate, response_provider)
+        candidate.headroom = estimate_channel_headroom(candidate)
+        candidate.trust = lookup_response_trust(candidate.family, hue_Y_bucket)
+
+    selected = rank_candidates(candidates, policy)
+    selected = apply_endpoint_luminance_policy_if_direct(selected, policy)
+    return quantize(selected.output_tuple), selected.metadata
+```
+
+#### Metadata
+
+```text
+model_family = interleaved_rgb_assisted_y_linear
+assisted_model_family = strict_subgamut | wx_radial_virtual | wx_virtual_axis_maxbright | wx_lp_legacy | ...
+chromatic_candidate_family = rgb_only | rgby | rgbv | rgbcmy | profile-defined
+selected_candidate_family = chromatic_only | assisted
+candidate_y_error
+candidate_xy_error
+candidate_y_step_estimate
+candidate_headroom
+interleave_selection_policy
+interleave_hysteresis_state
+```
+
+Verifier and correction dictionaries must preserve this metadata. The same input
+RGB can be solved by two different physical families, and those measurements are
+not interchangeable.
+
+#### Practical RGBW interpretation
+
+For a neutral or low-saturation color, W-assisted output may be the most power
+efficient and brightest result. For an edge or hue where the W-assisted path
+jumps from `Y_1` to `Y_5`, the RGB-only candidate may be able to land near
+`Y_2`, `Y_3`, or `Y_4` because it uses weaker emitters. This can remain useful
+even with TemporalBFI or true 16-bit chipsets, because the physical Y per code is
+still different for each emitter.
+
+Green usually has more Y headroom than red or blue in common RGBW packages, so
+RGB-only granularity is not perfectly uniform. The mode should therefore score
+actual response curves rather than assuming all RGB channels are equally weak.
+
+
 ## 14. Tetrahedral LUT interpolation
 
 The LUT runtime should use tetrahedral interpolation by default.
