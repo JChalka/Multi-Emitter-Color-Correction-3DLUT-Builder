@@ -213,21 +213,23 @@ The output tuple is initialized as zero, then the solved components are inserted
 
 ### Brightness / endpoint policy
 
-A simplex solve may request a participating channel above full drive. This can happen in strict sub-gamut, RGB-only, native outer-edge locks, and any WX mode that deliberately falls back to a direct single/dual RGB edge. It is not a WX/interior-overdrive-only issue. Define:
+A simplex solve may request a participating channel above full drive. Define:
 
 ```math
 m = \max_i(t_i)
 ```
 
-The builder must not treat the response to `m > 1` as a fixed physical law. It is a **profile policy** because different applications may prefer different tradeoffs between target-Y correctness, chromaticity preservation, and post-clip channel granularity. The policy applies to direct topology solves regardless of the selected high-level model family. Native `RG`, `RB`, and `BG` edge locks inside `wx_lp_legacy`, `wx_radial_virtual`, or `wx_virtual_axis_maxbright` must use this same policy because those outputs contain no W channel and are not overdrive solves.
+The builder must not treat the response to `m > 1` as a fixed physical law. It is a **profile policy** because different applications may prefer different tradeoffs between target-Y correctness, chromaticity preservation, and post-clip channel granularity.
 
 Supported policy family:
 
 ```text
 y_correct_clip:
-    keep the absolute target-Y solve as the contract and clip physical channels
-    only where required. This preserves Y intent until the device cannot follow
-    it, then accepts the resulting clipping / residual error.
+    keep the absolute target-Y solve while the direct topology has physical
+    headroom. Once any participating channel exceeds full drive, clamp the
+    whole tuple proportionally to the physical endpoint. This avoids independent
+    per-channel clipping and keeps the selected topology's chromaticity/ratio
+    contract.
 
 rolloff_after_clip:
     follow the y_correct_clip behavior near the endpoint but introduce a smooth
@@ -272,13 +274,23 @@ R = 32767, G = 14167
 
 under `scale_to_full_endpoint`.
 
-For a Y-correct clipping policy, the final tuple is closer to:
+For a Y-correct clipping policy, first form the requested-Y direct solve:
 
 ```math
-f_i = \min(t_i, 1)
+t_i^{node} = v t_i
 ```
 
-with the residual recorded as a real target error rather than hidden by endpoint scaling.
+If that node still has headroom, emit it directly. If it exceeds the physical endpoint, clamp proportionally:
+
+```math
+f_i =
+\begin{cases}
+t_i^{node}, & \max_j(t_j^{node}) \le 1 \\
+\frac{t_i^{node}}{\max_j(t_j^{node})}, & \max_j(t_j^{node}) > 1
+\end{cases}
+```
+
+This records the luminance residual as real clipping without independently clipping channels or applying the legacy endpoint-scale-by-value behavior.
 
 A rolloff policy should be represented as a smooth blend/compression between those two endpoints:
 
@@ -305,7 +317,7 @@ endpoint_scale_axis:
     source value / max input channel / explicit Y scale, depending on profile
 ```
 
-Builder, verifier, and correction reports must use the same endpoint policy. Otherwise a verifier can incorrectly mark a LUT as failing only because expected Y/chroma was computed under a different endpoint contract. Metadata should distinguish `endpoint_policy_applied=true` direct topology results from true WX/multi-emitter overdrive interiors where a different virtual-primary scaling policy may legitimately own the result.
+Builder, verifier, and correction reports must use the same endpoint policy. Otherwise a verifier can incorrectly mark a LUT as failing only because expected Y/chroma was computed under a different endpoint contract.
 
 ---
 
@@ -597,17 +609,18 @@ v\frac{t_i}{\max(1, \max_j t_j)}, & i \in g^* \\
 
 where `v` is the selected source/value scale.
 
-For `y_correct_clip`:
+For `y_correct_clip`, let `t_i^{node} = v t_i` for the requested source/value scale. Then:
 
 ```math
 f_i =
 \begin{cases}
-\min(t_i, 1), & i \in g^* \\
+t_i^{node}, & i \in g^*, \max_j(t_j^{node}) \le 1 \\
+\frac{t_i^{node}}{\max_j(t_j^{node})}, & i \in g^*, \max_j(t_j^{node}) > 1 \\
 0, & i \notin g^*
 \end{cases}
 ```
 
-`rolloff_after_clip` uses the same direct topology but replaces the hard endpoint with a smooth knee between the Y-correct clipped tuple and the endpoint-scaled tuple.
+`rolloff_after_clip` uses the same direct topology but replaces the hard transition into the proportional endpoint with a smooth knee between the requested-Y path and the endpoint-scaled path.
 
 The strict invariant is the topology, not a single endpoint-luminance behavior:
 
@@ -638,7 +651,6 @@ All WX modes should preserve these invariants when requested:
 ```text
 native R / G / B identity
 native outer RG / RB / BG edge locking
-endpoint luminance policy on those native outer-edge locks
 low-Y collapse to fewer channels
 out-of-hull projection before solve
 verifier-known fail/pass override behavior

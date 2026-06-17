@@ -168,14 +168,16 @@ It intentionally avoids arbitrary four-channel RGBW output.
 
 ### Luminance endpoint / clipping policy
 
-Strict topology defines which channels are allowed to participate. It does not, by itself, define what should happen when a target chromaticity and requested Y would force a participating channel past its available endpoint. The same policy also applies to any direct edge-lock solve inside an overdrive family. For example, native `RG`, `RB`, and `BG` inputs remain dual-channel edge solves under `wx_lp_legacy`, `wx_radial_virtual`, and `wx_virtual_axis_maxbright`; those cases have no W/inner channel participating, so they are not overdrive solves.
+Strict topology defines which channels are allowed to participate. It does not, by itself, define what should happen when a target chromaticity and requested Y would force a participating channel past its available endpoint.
 
 That behavior should be a profile-selected policy rather than an implicit physical rule:
 
 ```text
 y_correct_clip:
-    preserve the requested Y contract as far as possible and accept hard clipping
-    or chromaticity/Y error once a channel endpoint is reached.
+    solve the requested Y directly. If the tuple still has physical headroom,
+    emit that raw solve. Once any participating channel exceeds full drive,
+    clamp proportionally to the physical endpoint instead of scaling that
+    endpoint by the input/value axis.
 
 rolloff_after_clip:
     follow the clipping/Y-correct result near the limit, then apply a smooth
@@ -193,20 +195,21 @@ Example:
 
 ```text
 half-scale yellow target
-raw chromaticity solve clips to:  R=65535, G=28335
+proportional physical endpoint:  R=65535, G≈34210
 
 scale_to_full_endpoint:
-    output becomes roughly:       R=32767, G=14167
+    scales the endpoint by value: R≈32767, G≈17105
 
 y_correct_clip:
-    keeps the absolute solve/clip behavior instead of rescaling the endpoint.
+    follows the raw requested-Y solve until it clips, then lands on the
+    proportional endpoint:       R=65535, G≈34210
 
 rolloff_after_clip:
-    transitions between those behaviors with a smooth knee so the clipped region
-    retains usable gradation without silently redefining target Y everywhere.
+    transitions between the raw requested-Y path and the endpoint-scaled path
+    with a smooth knee so the clipped region retains usable gradation.
 ```
 
-The builder should record this policy in LUT metadata, verifier reports, and correction dictionaries so measurements from Y-correct, rolloff, and endpoint-scaled cubes are not mixed. The policy should be evaluated at the direct-topology boundary layer before WX/interior overdrive logic is considered: true four-channel WX interiors can keep their selected overdrive scaling, while native outer-dual edge locks inside those modes must honor the same endpoint policy as strict sub-gamut.
+The builder should record this policy in LUT metadata, verifier reports, and correction dictionaries so measurements from Y-correct, rolloff, and endpoint-scaled cubes are not mixed.
 
 ### WX / white-overdrive
 
