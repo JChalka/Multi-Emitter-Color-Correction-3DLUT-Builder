@@ -293,9 +293,11 @@ y_preserving_split:
     place ambiguous split boundaries where solved/max Y stays continuous.
 
 distance_inner_fit:
-    for ambiguous inner-emitter regions, compare target xy distance to the local
-    InnerA / InnerB / OuterA / OuterB neighborhood and select the direct
-    OuterA+OuterB+Inner simplex with the closer inner-anchor fit.
+    default-friendly cached split policy for ambiguous inner-emitter regions.
+    Precompute an equal-fit line/curve across each local ambiguous trapezoid,
+    then select the direct OuterA+OuterB+Inner simplex from the target's side of
+    that boundary. Runtime caches may use a 2-point line or 3-point polyline;
+    PC LUT builds can cache a dense curve and simplify it when nearly linear.
 
 virtual_inner_anchor:
     constrained overdrive/virtual-primary policy for missing hue-side inner
@@ -309,7 +311,8 @@ rgbw_lut_builder/model/simplex.py
     shared line/triangle/simplex solve and expansion primitive
 
 rgbw_lut_builder/model/topology.py
-    legal candidate generation, strict-vs-overdrive guards, overlap policy owner
+    legal candidate generation, strict-vs-overdrive guards, overlap policy owner,
+    ambiguous trapezoid detection, and cached distance-inner-fit boundary owner
 
 rgbw_lut_builder/model/interleaved_y.py
     planned RGB/chromatic-only vs assisted solve candidate selection for Y-linear
@@ -324,6 +327,10 @@ rgbw_lut_builder/model/layered_simplex.py
 rgbw_lut_builder/model/emitter_classification.py
     outer / inner / edge classification and ambiguous-edge handling
 
+rgbw_lut_builder/model/inner_split_cache.py
+    cached distance_inner_fit split lines/curves, curve simplification,
+    runtime cache serialization, and tie-break metadata
+
 rgbw_lut_builder/response/multi_emitter_profile.py
     arbitrary channel-count emitter profiles, current/Y metadata, policy knobs
 
@@ -337,6 +344,19 @@ Implementation rule:
 strict and overdrive outputs must not be mixed in the same feedback bucket;
 verifier reports and correction dictionaries must preserve model_family and
 active_channel_family metadata.
+```
+
+Distance-inner-fit cache metadata:
+
+```text
+inner_split_cache_id
+inner_split_region_id
+inner_split_outer_pair
+inner_split_inner_pair
+inner_split_cache_mode: line_2pt | curve_3pt | curve_multipoint | curve_full
+inner_split_simplification_error
+inner_split_tie_break_policy
+inner_split_tie_preferred_inner
 ```
 
 ## Endpoint luminance / clipping policy

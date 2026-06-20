@@ -1497,6 +1497,87 @@ overdrive. The solver still selects one direct strict simplex and solves that
 simplex directly. It does not solve both inner-anchor layers and blend the
 outputs afterward.
 
+###### Cached split boundary form
+
+`distance_inner_fit` is a good default candidate because the expensive part can
+be computed once per emitter profile, not per LUT node. The ambiguous local
+shape is usually a trapezoid or near-trapezoid bounded by:
+
+```text
+OuterA -------- OuterB
+   \            /
+    \          /
+     InnerA  InnerB
+```
+
+The profile can precompute the split boundary where the two inner choices have
+equal fit score:
+
+```text
+score_A(T) = score_B(T)
+```
+
+For the simplest Euclidean inner-distance policy this is close to the
+perpendicular bisector between `InnerA` and `InnerB`, clipped to the ambiguous
+outer-edge region. For the more useful normalized four-neighborhood policy, the
+boundary may curve because the score also includes local scale, outer-edge
+projection residual, measured response evidence, or power/channel-resolution
+weights.
+
+The cached boundary then becomes a cheap side-of-boundary test:
+
+```text
+if T is on InnerA side of cached split:
+    choose OuterA + OuterB + InnerA
+elif T is on InnerB side of cached split:
+    choose OuterA + OuterB + InnerB
+else:
+    apply configured tie-break policy
+```
+
+Cache granularities should be profile/runtime selectable:
+
+```text
+line_2pt:
+    store only the clipped start/end of the split. Lowest memory and fastest
+    runtime path; good when the split is effectively straight.
+
+curve_3pt:
+    store start/mid/end. Useful MCU default because it captures basic curvature
+    while keeping cache size very small.
+
+curve_multipoint:
+    store a small polyline with configurable point count. Useful for richer
+    embedded runtimes or profiles where the split bends noticeably.
+
+curve_full:
+    PC/LUT-builder cache. Precompute the full high-granularity split curve before
+    candidate generation, then optionally simplify it for export.
+```
+
+If the full curve fits a straight line within the profile tolerance, the builder
+should collapse it to `line_2pt`. If a three-point approximation is within
+tolerance, export `curve_3pt`; otherwise keep the requested multipoint/full
+representation for host-side builds.
+
+Tie-break metadata remains required because exact boundaries and numerical
+near-ties still exist:
+
+```text
+inner_split_tie_break_policy:
+    previous_owner | preferred_inner | measured_evidence | power_efficiency |
+    channel_resolution | deterministic_profile_order
+
+inner_split_tie_preferred_inner:
+    InnerA or InnerB for exact/effective equality when no stronger evidence is
+    available
+```
+
+This cache shape is also useful for diagnostics: verifier reports can overlay
+the split line/curve on the CIE plot, show which side selected each candidate,
+and identify whether a mismatch came from the split policy or from the direct
+simplex solve itself.
+
 ##### Policy: constrained virtual inner anchor
 
 A missing hue-side inner emitter can leave an awkward strict overlap decision.

@@ -342,11 +342,12 @@ y_preserving_split:
     unintentionally brighter than the other.
 
 distance_inner_fit:
-    for an ambiguous outer-edge region with two possible inner anchors, compare
-    the target xy distance to InnerA, InnerB, OuterA, and OuterB. Choose the
-    direct OuterA+OuterB+Inner candidate whose inner-anchor fit is closer to the
-    target xy, then fall through to hysteresis, measured evidence, efficiency,
-    or deterministic profile order when the two fits are effectively tied.
+    default-friendly cached split policy for ambiguous outer-edge regions with
+    two possible inner anchors. Build a line or curve across the local trapezoid
+    where both inner choices have equal distance/fit score, then choose the
+    direct OuterA+OuterB+Inner simplex on the target's side of that boundary.
+    Ties fall through to the configured inner-emitter preference, hysteresis,
+    measured evidence, efficiency, or deterministic profile order.
 
 virtual_inner_anchor:
     optionally create a constrained virtual inner anchor for a missing hue-side
@@ -357,9 +358,20 @@ virtual_inner_anchor:
 
 Distance-based inner fit remains a strict policy: it only decides which one
 legal direct simplex owns the ambiguous region. It does not solve both inner
-anchors and blend the results. Borders can still tie, so the profile should
-record a deterministic tie-break policy and the verifier should report where
-that tie-break was used.
+anchors and blend the results.
+
+The useful implementation form is a cached split boundary across the ambiguous
+outer-edge trapezoid. For each local pair `OuterA/OuterB + InnerA/InnerB`, the
+profile can precompute the equal-fit boundary once, then classify targets by
+which side of that cached line/curve they fall on. A small MCU/runtime profile
+may store a direct two-point line or a three-point polyline; a PC LUT builder can
+cache a dense multi-point curve before candidate generation. If the computed
+boundary is effectively straight, the profile should collapse it back to the
+smallest line representation instead of carrying unnecessary cache points.
+
+Borders can still tie, so the profile should record a deterministic tie-break
+policy, including which inner diode is preferred on exact/effective equality,
+and the verifier should report where that tie-break was used.
 
 For the virtual-inner-anchor policy, the virtual point should not be introduced
 alone. A single RB-side virtual primary can make that sub-gamut brighter than the
