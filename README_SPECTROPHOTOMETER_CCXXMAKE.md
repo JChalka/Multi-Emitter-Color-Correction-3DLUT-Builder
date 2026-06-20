@@ -186,7 +186,7 @@ The relay should send a JSON request similar to:
   "rgb8": [255, 128, 0],
   "rgb_float": [1.0, 0.5019608, 0.0],
   "render_mode": "temporal_bfi",
-  "source_gamut": "rec709",
+  "source_gamut": "native",
   "input_transfer": "linear",
   "output_family": "rgbw16",
   "settle_ms": 500,
@@ -266,7 +266,7 @@ render backend:
     rgb8 | rgb16 | temporal_bfi | channels16 | current LUT/model path
 
 source gamut / transfer:
-    rec709 linear by default unless the profile says otherwise
+    native linear by default unless the profile says otherwise
 
 settle / black insertion:
     per-patch settle delay and optional black frame between patches
