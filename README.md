@@ -27,6 +27,7 @@ Start here for orientation, then use the deeper docs when implementing or review
 | [`README_ROADMAP.md`](README_ROADMAP.md) | Full project roadmap, implementation phases, migration plan, current status, and future builder direction. |
 | [`README_MATH_MODEL.md`](README_MATH_MODEL.md) | Detailed solve architecture for RGB, strict RGBW sub-gamut, WX / white-overdrive, capture-cloud correction, and multi-emitter strict/overdrive models. |
 | [`README_CIE_VIRTUAL_HULL_WHITE_CAPACITY_PROFILE_PREPROCESS.md`](README_CIE_VIRTUAL_HULL_WHITE_CAPACITY_PROFILE_PREPROCESS.md) | Future virtual-reference-hull / virtual-emitter profile preprocessing design. |
+| [`README_SPECTROPHOTOMETER_CCXXMAKE.md`](README_SPECTROPHOTOMETER_CCXXMAKE.md) | Spectrophotometer / colorimeter correction workflow, Argyll `ccxxmake` / CCXX artifact plan, and host GUI patch relay design. |
 | [`docs/project_function_tree.md`](docs/project_function_tree.md) | Generated lookup layer mapping roadmap items to current modules, legacy sources, and candidate functions. |
 
 ---
@@ -369,133 +370,44 @@ than a one-off brightness spike.
 
 ---
 
-## Display profiling and instrument correction
+## Display profiling, instrument correction, and spectral reports
 
-The measured builder treats capture quality as part of the display profile.
-
-Earlier captures assumed a colorimeter-based workflow. The roadmap now includes an explicit instrument-correction layer so a spectrophotometer reference, such as an EFI ES-3000-class instrument, can be used to correct the faster colorimeter used for large capture sweeps.
-
-The intended separation is:
+The measured builder treats capture quality as part of the display profile. The
+short version is:
 
 ```text
-instrument profile:
-    how the measurement device should be corrected
-
-display / emitter profile:
-    what the LED + wall/diffuser/optics setup emits
-
-correction field:
-    how measured display behavior deviates from the math model
+spectrophotometer reference when available
+→ Argyll ccxxmake .ccmx / .ccss artifact
+→ spotread -X during colorimeter capture
+→ raw + corrected XYZxyY stored in capture rows
+→ builder/verifier consume corrected measurements by default
 ```
 
-The first implementation target should lean on the existing ArgyllCMS correction workflow rather than inventing a repo-specific correction format first. Argyll `ccxxmake` can generate both matrix corrections (`.ccmx`) and spectral sample corrections (`.ccss`), and `spotread` can already consume those correction files directly:
+The detailed plan now lives in
+[`README_SPECTROPHOTOMETER_CCXXMAKE.md`](README_SPECTROPHOTOMETER_CCXXMAKE.md).
+That companion document covers the host_calibration_gui / `ccxxmake` bridge,
+including `-d dummy`, the `-C` patch relay command, 8-bit and normalized-float
+RGB patch arguments, high-bit-depth/TemporalBFI rendering, correction metadata,
+validation, and later spectral reports.
 
-```bash
-spotread -v -X my_matrix.ccmx
-spotread -v -X my_spectral.ccss
-```
-
-That means the builder can treat Argyll CCXX artifacts as the canonical first implementation path:
+Keep the artifact boundaries clear:
 
 ```text
-paired spectro/colorimeter captures
-→ ccxxmake-generated CCMX or CCSS
-→ spotread -X correction during future captures
-→ raw + corrected XYZxyY stored in capture/verifier data
-→ builder consumes corrected measurements by default
+InstrumentProfile:
+    colorimeter / spectrophotometer identity and spotread options
+
+ArgyllCorrectionProfile:
+    .ccmx / .ccss path, kind, instruments, geometry, validation, and -X command
+
+DisplayProfile:
+    emitter profile, correction profile, geometry, reference white,
+    and raw/corrected measurement policy
 ```
 
-Repo-side instrument profiles should therefore record the Argyll correction artifact path/type, validation stats, instrument ids, display geometry, and raw/corrected measurement policy. A small native JSON wrapper can reference or copy the `.ccmx` / `.ccss` file and store builder-specific metadata without replacing the Argyll format.
-
-A fallback internal 3×3 representation can still exist for diagnostics or environments where applying `spotread -X` is not practical:
-
-```text
-XYZ_reference ≈ M · XYZ_colorimeter
-```
-
-Raw and corrected measurements should both be preserved. Corrected XYZxyY should become the default data used by the builder/verifier when a valid correction profile is attached.
-
----
-
-## Spectral characterization and lighting-quality reports
-
-Because the workflow now includes spectrophotometer readings in addition to faster corrected colorimeter captures, the project can expose more than XYZxyY correction data. Spectro captures should also be usable for deeper emitter and system characterization.
-
-The builder should distinguish between:
-
-```text
-colorimeter / corrected XYZxyY:
-    fast capture path for dense calibration, verifier runs, and LUT correction
-
-spectrophotometer SPD:
-    slower reference path for spectral correction, emitter analysis,
-    CRI / TM-30 / TLCI-style reports, and deeper optical characterization
-```
-
-Per-emitter reports should be able to summarize each physical channel and each important mixed family:
-
-```text
-single emitters:
-    R, G, B, W, CW, WW, amber, violet, yellow, etc.
-
-mixed references:
-    neutral ramp
-    strict sub_gamut white / near-white families
-    WX / overdrive high-W families
-    RGB+CCT inner-anchor blends
-    user-selected representative output tuples
-```
-
-Initial spectral metrics should include:
-
-```text
-basic SPD metadata:
-    wavelength range, wavelength step, peak wavelength, dominant wavelength,
-    centroid wavelength, FWHM, CCT/Duv where meaningful, x/y and u'/v'
-
-CRI / CIE 13.3:
-    Ra, individual Ri values, and common R9/R12-style red/blue-green checks
-
-ANSI/IES TM-30:
-    Rf, Rg, local hue-bin fidelity/chroma/hue shifts, and color-vector graphic data
-
-additional optional report families:
-    CIE 224-style fidelity metrics where useful
-    TLCI / camera-lighting consistency for video-oriented setups
-    SSI-style spectral similarity when a reference spectrum is selected
-    LM-79-style photometric/colorimetric summary fields for SSL-style reporting
-```
-
-These reports are not required for building a LUT, but they are useful for understanding what the emitters and wall/diffuser system actually are. A user may want to know whether a high-W maxbright path is only bright, whether a custom RGB+CCT strip has useful rendering quality, or whether a wallwash setup has poor red fidelity even after the LUT is chromatically accurate.
-
-The report path should preserve raw inputs and derived outputs:
-
-```text
-SpectralMeasurement:
-    instrument_id
-    correction_id / Argyll CCXX id when applicable
-    emitter_profile_id
-    geometry_id
-    output_tuple / active_channel_family
-    wavelength_nm[]
-    spectral_power[]
-    derived XYZxyY
-    derived report metrics
-
-SpectralReport:
-    report_id
-    display_profile_id
-    emitter_profile_id
-    report_standard: cri | tm30 | tlci | ssi | lm79_summary | custom
-    per_emitter_results
-    mixed_family_results
-    validation_notes
-    generated_at
-```
-
-The host GUI should eventually display these as HTML/CSV/JSON reports alongside the normal verifier tables. The standalone package should keep spectral analysis modular so LUT generation does not depend on CRI/TM-30 reporting libraries.
-
----
+Spectral/lighting-quality reports remain optional diagnostics. Corrected XYZxyY
+is the normal LUT solve input; SPD-dependent reports such as CRI, TM-30, TLCI,
+SSI, and LM-79-style summaries are generated only when spectrophotometer data is
+available.
 
 ## Verification and correction direction
 
@@ -566,6 +478,7 @@ build/export the existing coarse/dense LUTs
 generate True16 calibration headers
 generate binary RGB/RGBW cubes for device testing
 track Argyll CCXX / CCMX / CCSS instrument-correction metadata
+run or review the host GUI / ccxxmake patch-relay workflow
 generate or review spectral characterization reports
 inspect per-emitter CRI / TM-30 / TLCI-style diagnostics
 review migration targets for the standalone builder
@@ -580,6 +493,7 @@ Rec.709 / Rec.2020 / P3 / native linear-light behavior
 TV/display-primary-aware target gamuts
 instrument-corrected display profiles
 Argyll CCXX / CCMX / CCSS colorimeter correction through spotread -X
+host_calibration_gui-driven ccxxmake correction sessions
 per-emitter spectral reports, CRI, TM-30, TLCI, and related diagnostics
 capture-cloud correction
 arbitrary emitter profiles

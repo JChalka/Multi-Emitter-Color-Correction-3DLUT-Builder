@@ -9,6 +9,7 @@ Use the companion docs for deeper descriptions:
 ```text
 README.md             project overview and detailed feature framing
 README_MATH_MODEL.md  solve equations, algorithms, and policy examples
+README_SPECTROPHOTOMETER_CCXXMAKE.md  spectro/colorimeter correction and ccxxmake bridge
 ```
 
 ---
@@ -67,118 +68,71 @@ This separation prevents double-applying tone curves. The LED cube should normal
 
 ---
 
-## Display profiling and instrument correction
+## Display profiling, instrument correction, and spectral reports
 
-The roadmap should track the repository work needed to make measurement quality
-part of the display profile. The detailed instrument-correction design lives in
-`README.md`; this file only needs the implementation-oriented summary.
+This roadmap keeps the implementation slot for colorimeter correction and
+spectral reporting, but the detailed spectrophotometer / Argyll workflow is
+split out to
+[`README_SPECTROPHOTOMETER_CCXXMAKE.md`](README_SPECTROPHOTOMETER_CCXXMAKE.md).
 
 Target behavior:
 
 ```text
 spectrophotometer reference when available
-→ Argyll CCXX / CCMX / CCSS correction artifact
+→ Argyll ccxxmake .ccmx / .ccss correction artifact
 → spotread -X correction during colorimeter capture
 → raw + corrected XYZxyY stored in capture rows
 → builder/verifier consume corrected measurements by default
 ```
 
-Keep these as separate artifacts:
+Core artifact boundaries:
 
 ```text
 InstrumentProfile:
-    identifies the colorimeter / spectro and spotread options
+    identifies colorimeter / spectrophotometer hardware and spotread options
 
 ArgyllCorrectionProfile:
-    wraps .ccmx / .ccss path, kind, source instruments, geometry, and validation
+    wraps .ccmx / .ccss path, kind, source instruments, render geometry,
+    patch-relay session metadata, validation, and spotread -X command
 
 DisplayProfile:
     references emitter profile, instrument profile, correction profile,
     geometry, reference white, and measurement policy
 ```
 
-Fallback/internal matrix correction can remain as a diagnostic path:
+The host GUI / `ccxxmake` bridge should use Argyll's dummy display plus `-C`
+command hook so `ccxxmake` can own the patch sequence while host_calibration_gui
+owns the actual LED rendering path:
 
 ```text
-XYZ_reference ≈ M · XYZ_colorimeter
+ccxxmake -d dummy -C "tools/ccxxmake_patch_relay.py ..."
+    → relay receives RGB8 + RGB float patch arguments
+    → host_calibration_gui renders the patch through rgb8/rgb16/TemporalBFI/channels16
+    → ccxxmake measures the displayed LED/wall/diffuser output
+    → .ccmx or .ccss is registered as a correction profile
 ```
 
-Roadmap ownership:
+Implementation ownership:
 
 ```text
-rgbw_lut_builder/response/
-    instrument and display/emitter profile records
-
-rgbw_lut_builder/captures/
-    raw/corrected XYZxyY capture schemas and spotread command integration
-
-rgbw_lut_builder/verify/
-    correction validation summaries and raw-vs-corrected report views
-
 host calibration GUI:
-    correction profile loading, spotread -X wiring, paired capture helpers,
-    and raw/corrected display toggles
-```
+    CCXX panel, patch relay endpoint, render-mode selection, command preview,
+    correction registration, validation display
 
-Rebuild or revalidate the correction when the LED package, wall/diffuser,
-measurement geometry, instrument, spotread mode, or high-W/multi-emitter
-spectral content changes enough that the old correction may no longer describe
-the current setup.
+rgbw_lut_builder/profiling/argyll_ccxx.py:
+    CCXX metadata schema, command builders, artifact registration
 
----
+tools/ccxxmake_patch_relay.py:
+    command invoked by ccxxmake -C; relays RGB8 / RGB float patches to the GUI
 
-## Spectral characterization and lighting-quality reports
+tools/make_argyll_ccxx.py:
+    optional wrapper around ccxxmake and repo metadata paths
 
-The roadmap should also track deeper spectral analysis now that the workflow has
-a spectrophotometer path. This is separate from the core LUT solve: LUT building
-mainly needs corrected XYZxyY, while spectral reports need actual SPD samples.
+rgbw_lut_builder/captures/spotread_protocol.py:
+    spotread command construction, -X injection, raw/corrected field mapping
 
-Target behavior:
-
-```text
-spectrophotometer SPD capture
-→ per-emitter / mixed-family spectral record
-→ derived colorimetry and lighting-quality metrics
-→ HTML / CSV / JSON reports
-→ optional profile metadata used by verifier and documentation
-```
-
-Initial report scope:
-
-```text
-per-emitter stats:
-    SPD range/step, peak wavelength, dominant wavelength, centroid wavelength,
-    FWHM, x/y, u'/v', CCT/Duv where meaningful, luminance/radiometric metadata
-
-CRI / CIE 13.3:
-    Ra, Ri values, and common R9/R12-style checks
-
-ANSI/IES TM-30:
-    Rf, Rg, hue-bin data, local chroma/hue shifts, and color-vector graphic data
-
-additional optional standards:
-    CIE 224-style fidelity metrics
-    TLCI for camera/video lighting workflows
-    SSI-style spectral similarity against a selected reference
-    LM-79-style photometric/colorimetric summary fields for SSL-style reports
-```
-
-Roadmap ownership:
-
-```text
-rgbw_lut_builder/profiling/
-    SPD capture records, Argyll CCXX wrapper metadata, spectral report builders,
-    CRI/TM-30/TLCI/SSI calculation adapters, and validation summaries
-
-rgbw_lut_builder/captures/
-    spectro SPD capture schemas and links between SPD records and XYZxyY rows
-
-rgbw_lut_builder/verify/
-    report surfaces that can link normal verifier residuals to spectral metrics
-
-host calibration GUI:
-    per-emitter spectral capture plans, report generation buttons,
-    and HTML/CSV/JSON report viewers
+rgbw_lut_builder/profiling/spectral_reports.py:
+    optional SPD-based CRI / TM-30 / TLCI / SSI / LM-79-style reports
 ```
 
 Implementation rule:
@@ -186,11 +140,8 @@ Implementation rule:
 ```text
 spectral reports are profile diagnostics, not required solve inputs.
 Corrected XYZxyY remains the normal builder/verifier path.
-SPD-dependent metrics should be emitted only when a spectro capture is available.
+SPD-dependent metrics should be emitted only when spectro data is available.
 ```
-
-This lets the project serve both calibration users and users who want deeper
-lighting-analysis information about their LED/wallwash setup.
 
 ## Current codebase status
 
@@ -1638,24 +1589,24 @@ Use the roadmap rows below for task-level status and ownership, then use the fun
 
 | Roadmap item | Status | Move target / source | Math / prototype | Pinned work |
 | --- | --- | --- | --- | --- |
-| add instrument/display profile schema | planned | New profile artifacts -> `rgbw_lut_builder/profiling/instruments.py` and `rgbw_lut_builder/profiling/display_profile.py` | [Display profiling and instrument correction](#display-profiling-and-instrument-correction) | Target modules should record colorimeter, spectro, geometry, raw/corrected measurement policy, and correction ids. |
-| implement paired spectro/colorimeter capture workflow | planned | Host calibration GUI + UDP capture protocol + `tools/profile_instrument.py` -> `rgbw_lut_builder/profiling/paired_capture.py` | [Display profiling and instrument correction](#display-profiling-and-instrument-correction) | First version should render the same sparse RGBW/WX patch plan for the spectrophotometer and colorimeter and store paired raw XYZxyY. |
-| integrate Argyll `ccxxmake` / CCXX artifacts | planned | Argyll wrapper + profile metadata -> `rgbw_lut_builder/profiling/argyll_ccxx.py`, `tools/make_argyll_ccxx.py`, and host GUI spotread command handling | [Preferred first implementation: Argyll CCXX / `ccxxmake`](#preferred-first-implementation-argyll-ccxx--ccxxmake) | Prefer `.ccmx` / `.ccss` output and feed it back into measurements via `spotread -X`; repo JSON should wrap the Argyll artifact with ids, geometry, validation, and raw/corrected policy. |
-| fit 3x3 XYZ correction matrix | planned | New correction fitter -> `rgbw_lut_builder/profiling/matrix_correction.py` | [Display profiling and instrument correction](#fallbackinternal-implementation-paired-spectrocolorimeter-matrix-correction) | Keep this as fallback/debug/cross-check against Argyll `.ccmx`; fit `XYZ_reference ≈ M · XYZ_colorimeter`, with low-Y/outlier handling and a holdout validation report. |
-| support spectral / CCSS-style correction metadata | planned | Future spectral artifact loader/exporter -> `rgbw_lut_builder/profiling/spectral_correction.py` | [Display profiling and instrument correction](#correction-artifacts) | Prefer Argyll `.ccss` when available; metadata should allow spectro-derived spectral sample corrections without changing capture schemas. |
-| apply instrument correction in capture loaders | planned | Capture loaders and response providers -> `rgbw_lut_builder/captures/loaders.py`, `rgbw_lut_builder/response/*` | [Display profiling and instrument correction](#host-gui--capture-workflow) | Raw XYZxyY must be preserved; corrected XYZxyY becomes the default measurement used by builder/verifier when a valid correction profile is attached. |
-| add verifier raw-vs-corrected diagnostics | planned | Verifier/report surfaces -> `rgbw_lut_builder/verify/reports.py` and host calibration GUI verifier | [Display profiling and instrument correction](#host-gui--capture-workflow) | Reports should show whether correction was applied and allow before/after error summaries for the correction profile. |
+| add instrument/display profile schema | planned | New profile artifacts -> `rgbw_lut_builder/profiling/instruments.py` and `rgbw_lut_builder/profiling/display_profile.py` | [Spectrophotometer / CCXX workflow](README_SPECTROPHOTOMETER_CCXXMAKE.md) | Target modules should record colorimeter, spectro, geometry, raw/corrected measurement policy, and correction ids. |
+| implement paired spectro/colorimeter capture workflow | planned | Host calibration GUI + UDP capture protocol + `tools/profile_instrument.py` -> `rgbw_lut_builder/profiling/paired_capture.py` | [Spectrophotometer / CCXX workflow](README_SPECTROPHOTOMETER_CCXXMAKE.md) | First version should render the same sparse RGBW/WX patch plan for the spectrophotometer and colorimeter and store paired raw XYZxyY. |
+| integrate Argyll `ccxxmake` / CCXX artifacts | planned | Argyll wrapper + profile metadata -> `rgbw_lut_builder/profiling/argyll_ccxx.py`, `tools/make_argyll_ccxx.py`, `tools/ccxxmake_patch_relay.py`, and host GUI spotread/render command handling | [Argyll ccxxmake integration](README_SPECTROPHOTOMETER_CCXXMAKE.md#4-host-gui--ccxxmake-integration-model) | Prefer `.ccmx` / `.ccss` output; drive LED patches through `ccxxmake -d dummy -C` and feed the accepted correction back into future captures via `spotread -X`. |
+| fit 3x3 XYZ correction matrix | planned | New correction fitter -> `rgbw_lut_builder/profiling/matrix_correction.py` | [Correction artifact metadata](README_SPECTROPHOTOMETER_CCXXMAKE.md#7-correction-artifact-metadata) | Keep this as fallback/debug/cross-check against Argyll `.ccmx`; fit `XYZ_reference ≈ M · XYZ_colorimeter`, with low-Y/outlier handling and a holdout validation report. |
+| support spectral / CCSS-style correction metadata | planned | Future spectral artifact loader/exporter -> `rgbw_lut_builder/profiling/spectral_correction.py` | [Correction artifact metadata](README_SPECTROPHOTOMETER_CCXXMAKE.md#7-correction-artifact-metadata) | Prefer Argyll `.ccss` when available; metadata should allow spectro-derived spectral sample corrections without changing capture schemas. |
+| apply instrument correction in capture loaders | planned | Capture loaders and response providers -> `rgbw_lut_builder/captures/loaders.py`, `rgbw_lut_builder/response/*` | [Applying the correction later](README_SPECTROPHOTOMETER_CCXXMAKE.md#8-applying-the-correction-later) | Raw XYZxyY must be preserved; corrected XYZxyY becomes the default measurement used by builder/verifier when a valid correction profile is attached. |
+| add verifier raw-vs-corrected diagnostics | planned | Verifier/report surfaces -> `rgbw_lut_builder/verify/reports.py` and host calibration GUI verifier | [Applying the correction later](README_SPECTROPHOTOMETER_CCXXMAKE.md#8-applying-the-correction-later) | Reports should show whether correction was applied and allow before/after error summaries for the correction profile. |
 
 
 ### Phase 3B: spectral characterization and lighting-quality reports
 
 | Roadmap item | Status | Move target / source | Math / prototype | Pinned work |
 | --- | --- | --- | --- | --- |
-| add SPD capture schema and per-emitter spectral records | planned | Spectro capture data -> `rgbw_lut_builder/profiling/spectral_measurements.py` and `rgbw_lut_builder/captures/schemas.py` | [Spectral characterization and color-rendition reports](README_MATH_MODEL.md#15-spectral-characterization-and-color-rendition-reports) | Store wavelength/power arrays, instrument id, correction id, output tuple, active channel family, geometry id, and derived XYZxyY. |
-| add CRI / CIE 13.3 report generation | planned | Spectral metrics -> `rgbw_lut_builder/profiling/cri.py` and `rgbw_lut_builder/profiling/spectral_reports.py` | [Spectral characterization and color-rendition reports](README_MATH_MODEL.md#15-spectral-characterization-and-color-rendition-reports) | Emit Ra, Ri values, common R9/R12 checks, per-emitter summaries, and mixed-family reports. |
-| add ANSI/IES TM-30 report generation | planned | TM-30 adapter -> `rgbw_lut_builder/profiling/tm30.py` and report views | [Spectral characterization and color-rendition reports](README_MATH_MODEL.md#15-spectral-characterization-and-color-rendition-reports) | Emit Rf, Rg, hue-bin data, local chroma/hue shifts, and color-vector graphic data where a compliant implementation/library is available. |
-| add optional TLCI / SSI / LM-79-style summaries | planned | Optional report adapters -> `rgbw_lut_builder/profiling/{tlci,ssi,lm79_summary}.py` | [Spectral characterization and color-rendition reports](README_MATH_MODEL.md#15-spectral-characterization-and-color-rendition-reports) | Keep these as optional diagnostics for camera/video and SSL-style reporting; do not make them required for LUT generation. |
-| expose spectral reports in host GUI and verifier artifacts | planned | Host GUI + report writer -> `rgbw_lut_builder/verify/reports.py` and calibration GUI report surfaces | [Spectral characterization and color-rendition reports](README_MATH_MODEL.md#15-spectral-characterization-and-color-rendition-reports) | Export HTML/CSV/JSON reports and link verifier rows to spectral measurement ids when available. |
+| add SPD capture schema and per-emitter spectral records | planned | Spectro capture data -> `rgbw_lut_builder/profiling/spectral_measurements.py` and `rgbw_lut_builder/captures/schemas.py` | [Spectral reports plan](README_SPECTROPHOTOMETER_CCXXMAKE.md#10-spectral-and-lighting-quality-reports) | Store wavelength/power arrays, instrument id, correction id, output tuple, active channel family, geometry id, and derived XYZxyY. |
+| add CRI / CIE 13.3 report generation | planned | Spectral metrics -> `rgbw_lut_builder/profiling/cri.py` and `rgbw_lut_builder/profiling/spectral_reports.py` | [Spectral reports plan](README_SPECTROPHOTOMETER_CCXXMAKE.md#10-spectral-and-lighting-quality-reports) | Emit Ra, Ri values, common R9/R12 checks, per-emitter summaries, and mixed-family reports. |
+| add ANSI/IES TM-30 report generation | planned | TM-30 adapter -> `rgbw_lut_builder/profiling/tm30.py` and report views | [Spectral reports plan](README_SPECTROPHOTOMETER_CCXXMAKE.md#10-spectral-and-lighting-quality-reports) | Emit Rf, Rg, hue-bin data, local chroma/hue shifts, and color-vector graphic data where a compliant implementation/library is available. |
+| add optional TLCI / SSI / LM-79-style summaries | planned | Optional report adapters -> `rgbw_lut_builder/profiling/{tlci,ssi,lm79_summary}.py` | [Spectral reports plan](README_SPECTROPHOTOMETER_CCXXMAKE.md#10-spectral-and-lighting-quality-reports) | Keep these as optional diagnostics for camera/video and SSL-style reporting; do not make them required for LUT generation. |
+| expose spectral reports in host GUI and verifier artifacts | planned | Host GUI + report writer -> `rgbw_lut_builder/verify/reports.py` and calibration GUI report surfaces | [Spectral reports plan](README_SPECTROPHOTOMETER_CCXXMAKE.md#10-spectral-and-lighting-quality-reports) | Export HTML/CSV/JSON reports and link verifier rows to spectral measurement ids when available. |
 
 
 ### Phase 4: model-vs-capture diagnostics
