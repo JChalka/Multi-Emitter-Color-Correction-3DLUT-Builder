@@ -262,6 +262,75 @@ chooses a legal candidate family, and metadata should record whether the final
 node came from RGB/no-W, strict assisted sub-gamut, WX, or multi-emitter
 overdrive.
 
+Single-channel and dual-channel cases should be treated as direct-topology
+exceptions rather than duplicated per candidate tier. A request for one emitter,
+or a direct solve between two emitters, has no white/inner-emitter overdrive
+alternative unless a profile explicitly maps that input into a different model.
+Those direct single/edge solves can be stored once and shared by the interleaved
+selector instead of being repeated in every chromatic / strict / overdrive LUT.
+
+
+The candidate ladder can also include an explicit overdrive tier:
+
+```text
+chromatic/no-W candidate:
+    RGB / RGBY / RGBV / other outer-hull solve for fine low/mid Y placement
+
+strict assisted candidate:
+    strict RGBW / RGB+CCT / 5+ sub-gamut solve for efficient W/inner-emitter use
+
+overdrive assisted candidate:
+    WX / virtual-primary / layered-simplex solve for higher-Y regions where the
+    strict and chromatic candidates do not provide enough useful granularity
+```
+
+This has an important LUT-format consequence. Interleaving should not be assumed
+to mean "one normal 3D LUT that happens to contain RGB, strict, and overdrive
+results." With tetrahedral interpolation, a single vertex LUT cannot generally
+produce discrete interleaved candidate decisions unless it is stored densely
+enough to be effectively 1:1 with the intended input space, which becomes
+expensive quickly.
+
+The planned interleaved format should therefore make the contract explicit:
+
+```text
+multiple candidate LUTs:
+    RGB/chromatic LUT, strict-assisted LUT, optional overdrive LUT
+
+shared direct families:
+    single-channel and dual-channel direct solves are stored once and referenced
+    by the selector; they do not need one copy per candidate LUT
+
+per-node Y sidecar:
+    each candidate node should carry predicted/measured Y, or a compact fast
+    Y lookup surface, alongside the output tuple so runtime can compare
+    multiple candidates without recomputing their luminance
+
+selector / blend metadata:
+    compact lookup table, split-surface cache, coefficient field, or sparse
+    override table that says which candidate LUT is active and whether an
+    explicit blend is allowed
+
+runtime sampler:
+    still uses tetrahedral interpolation inside each candidate LUT, but candidate
+    selection / blend is a separate step with preserved metadata
+```
+
+Input precision should also be treated as a policy. A single 16-bit RGB input
+space is usually adequate for one 3D LUT, but once several Y-producing candidate
+families are interleaved, 16-bit input coordinates can truncate candidate-switch
+headroom that is still meaningful even when the final output channels remain
+16-bit. Fixed-point `q32`, normalized `float`, or normalized `double` input
+coordinates should be valid runtime/profile options, especially on targets with
+a strong FPU.
+
+This format is expected to be memory-expensive when it is used at meaningful
+precision. For 16-bit or q16-style output, practical interleaved candidate LUTs
+should normally start around `33^3`, with `55^3` or larger preferred when memory
+allows. `17^3` is mainly a low-memory / 8-bit-output compromise; it is usually
+too coarse for high-bit-depth interleaved Y selection unless a measured selector
+or correction layer absorbs the added error.
+
 ### Multi-emitter sub-gamut and overdrive
 
 The roadmap extends beyond RGBW. Future profiles can describe packages such as:
