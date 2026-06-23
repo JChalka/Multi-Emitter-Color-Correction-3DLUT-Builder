@@ -1799,361 +1799,6 @@ respect thermal/current budgets and user brightness policy
 
 
 
-### 13.3 Interleaved RGB / assisted Y-linear solve
-
-An additional planned solve family is an interleaved candidate-selection mode.
-It treats no-W/chromatic, strict-assisted, and optional overdrive-assisted solves
-as separate candidate tiers for the same target:
-
-```text
-candidate A: RGB / chromatic-only direct solve
-candidate B: strict RGBW, RGB+CCT, or 5+ strict sub-gamut solve
-candidate C: WX / virtual-primary / layered-simplex overdrive solve
-selection:   choose or blend candidates by xy/Y, local Y granularity, headroom,
-             response confidence, and profile policy
-```
-
-The motivation is Y quantization and channel granularity. In many RGBW strips,
-the W emitter is far brighter than the R/G/B emitters. A W-assisted solve can be
-more power efficient and can reach higher Y, but a one-code or one-response-step
-change in W may move luminance farther than the target ladder wants. A no-W RGB
-solve uses weaker emitters and may fill intermediate Y levels that sit between
-W-assisted steps. An overdrive tier can then extend the same idea farther into
-the high-Y region where strict assisted output is no longer enough.
-
-This remains a constrained model. It is not an unconstrained RGBW optimizer.
-Each candidate is solved through its own legal topology, and the final node
-records which candidate family won or whether an explicit inter-family blend was
-used.
-
-#### Candidate tiers
-
-For a target `X_t`, `xy_t`, and requested luminance `Y_t`, generate:
-
-```text
-C_chromatic:
-    direct RGB / chromatic-only candidate when xy_t lies inside that candidate
-    hull and the solve is physically valid
-
-C_strict_assisted:
-    selected strict assisted candidate, such as strict_rgbw_subgamut or
-    strict_multi_emitter_subgamut
-
-C_overdrive:
-    optional high-Y candidate, such as wx_radial_virtual,
-    wx_virtual_axis_maxbright, wx_lp_legacy, virtual_inner_anchor, or
-    multi_emitter_overdrive_layered_simplex
-```
-
-For RGBW:
-
-```text
-C_chromatic = solve_xyz([R, G, B], X_t)
-C_strict_assisted = selected strict RGBW sub-gamut candidate
-C_overdrive = selected WX / virtual-primary / max-white candidate
-```
-
-For multi-emitter packages, the chromatic-only candidate can be profile-defined:
-
-```text
-RGB
-RGBY
-RGBV
-RGBCMY
-outer-hull-only candidate set
-other no-inner/no-W chromatic simplexes declared by the emitter profile
-```
-
-The chromatic-only candidate is valid only where it can solve the target xy and
-Y with acceptable residual or a profile-defined projection. The strict-assisted
-candidate is valid where the chosen strict topology can solve or project the
-target under the active endpoint policy. The overdrive candidate is valid only
-when the selected profile explicitly enables that overdrive family.
-
-Single-channel and dual-channel targets are direct-topology exceptions. A target
-that asks for one physical emitter, or for a direct line between two emitters,
-does not have a meaningful overdrive candidate unless the profile explicitly
-redirects it into a different virtual model. For interleaved storage, these
-families should be stored once as shared direct solves and referenced by the
-selector rather than duplicated across `C_chromatic`, `C_strict_assisted`, and
-`C_overdrive` LUTs.
-
-#### Y-step / granularity metric
-
-Each candidate should expose an estimated local Y step. A simple first metric is
-based on active-channel full-drive Y and output quantization:
-
-```math
-\Delta Y_{q,i} \approx \frac{P_{i,Y}}{Q_i}
-```
-
-where `Q_i` is the effective code depth for channel `i` after any TemporalBFI,
-True16, or chipset response mapping.
-
-For a candidate output tuple `f`, the local luminance quantum can be estimated
-from the active channels:
-
-```text
-candidate_y_step = min useful local Y step from active channels
-```
-
-or from a response provider:
-
-```text
-candidate_y_step = local derivative / inverse-response step around f
-```
-
-W, CW, and WW often have much larger `P_Y` than R/B and usually larger than G.
-So a W-assisted candidate may have better efficiency but worse fine Y spacing.
-The RGB/chromatic-only candidate may have lower maximum Y but better intermediate
-Y placement. The overdrive tier can be useful when high-Y targets need more
-headroom than the strict candidate offers, but it must be scored separately so it
-does not silently overwrite strict-sub-gamut evidence.
-
-#### Selection score
-
-A first profile score can be:
-
-```text
-score(candidate) =
-    w_xy      * xy_error(candidate, target)
-  + w_Y       * abs(Y_candidate - Y_t)
-  + w_step    * candidate_y_step
-  + w_headroom* clipping_or_headroom_penalty
-  + w_switch  * topology_switch_penalty
-  + w_trust   * measured_response_uncertainty
-  + w_tier    * candidate_tier_bias
-```
-
-Lower score wins. Useful policies:
-
-```text
-y_linear_first:
-    prioritize target-Y tracking and local Y-step quality.
-
-efficiency_first:
-    prefer W/inner-assisted output unless RGB/chromatic-only or overdrive output
-    materially improves Y placement or avoids a visible luminance jump.
-
-overdrive_high_y:
-    allow chromatic-only and strict-assisted candidates in low/mid regions, then
-    admit overdrive candidates when they improve high-Y headroom or Y-step
-    placement enough to cross a configured threshold.
-
-hysteresis_locked:
-    require a minimum improvement before switching candidate family, preventing
-    alternating RGB/strict/overdrive choices across neighboring LUT nodes.
-
-measured_response_first:
-    prefer the candidate family with better verifier/pass/fail or response-curve
-    evidence for the current hue/Y bucket.
-```
-
-#### Algorithm
-
-```text
-function solve_interleaved_y_linear(source_rgb, profile, assisted_modes, policy):
-    X_t  = source_rgb_to_led_absolute_XYZ(source_rgb)
-    xy_t = XYZ_to_xy(X_t)
-    Y_t  = X_t.Y
-
-    candidates = []
-
-    chromatic_candidate = solve_chromatic_only_candidate(X_t, xy_t, profile)
-    if chromatic_candidate is valid:
-        candidates.append(chromatic_candidate.with_tier("chromatic"))
-
-    strict_candidate = solve_selected_strict_assisted_model(X_t, xy_t,
-                                                            assisted_modes.strict,
-                                                            profile)
-    if strict_candidate is valid:
-        candidates.append(strict_candidate.with_tier("strict_assisted"))
-
-    if policy.enable_overdrive_tier:
-        overdrive_candidate = solve_selected_overdrive_model(X_t, xy_t,
-                                                             assisted_modes.overdrive,
-                                                             profile)
-        if overdrive_candidate is valid:
-            candidates.append(overdrive_candidate.with_tier("overdrive_assisted"))
-
-    for candidate in candidates:
-        candidate.xy_error = compute_projected_xy_error(candidate, target)
-        candidate.Y_error = abs(candidate.predicted_Y - Y_t)
-        candidate.y_step = estimate_local_Y_quantum(candidate, response_provider)
-        candidate.headroom = estimate_channel_headroom(candidate)
-        candidate.trust = lookup_response_trust(candidate.family, hue_Y_bucket)
-
-    selected = rank_candidates(candidates, policy)
-    selected = apply_endpoint_luminance_policy_if_direct(selected, policy)
-    return quantize(selected.output_tuple), selected.metadata
-```
-
-#### Interleaved LUT storage contract
-
-The interleaved model should not be assumed to fit into one normal 3D output LUT.
-A single tetrahedral vertex cube containing RGB, strict-assisted, and overdrive
-vertices can interpolate across candidate-family boundaries and synthesize
-outputs that were never intended by the policy. It also cannot represent an
-interleaved switch that happens inside a cell unless the grid is dense enough to
-be effectively 1:1 with the desired input coordinates.
-
-The canonical representation should be a candidate-LUT set plus a selector or
-blend contract:
-
-```text
-CandidateLUTSet:
-    lut_chromatic
-    lut_strict_assisted
-    lut_overdrive_assisted optional
-
-SharedDirectFamilyTable:
-    single-channel and dual-channel direct solves stored once and referenced by
-    selector metadata; these do not need per-candidate copies
-
-CandidateYField:
-    predicted_Y and/or measured_Y per node/candidate, stored as a fast lookup
-    sidecar or interleaved field with the same sampling contract as the output
-    tuple
-
-SelectorField:
-    candidate index per region/cell/sample, or a compact split-surface / curve
-    cache that chooses the active LUT
-
-BlendField optional:
-    explicit alpha/coefficient field or formula when the profile intentionally
-    blends between candidate families
-
-RuntimeFormula:
-    target-specific rule for selector lookup, candidate Y lookup/comparison,
-    candidate LUT tetrahedral sample, optional blend, endpoint policy
-    application, and output quantization
-```
-
-Possible storage strategies:
-
-```text
-selector_volume:
-    low-bit candidate index stored on a grid. Easy to consume, larger memory.
-
-split_surface_cache:
-    store policy boundaries such as inner split curves or Y thresholds, then
-    classify the target at runtime. Lower memory, more runtime math.
-
-coefficient_field:
-    store selector/blend coefficients per cell or tetrahedron. Useful when the
-    interleave decision is smooth or threshold-like.
-
-sparse_override_table:
-    normal candidate defaults plus sparse overrides where the interleaved policy
-    differs. Useful when only a small region needs special handling.
-
-fully_baked_debug_lut:
-    one dense output LUT after all interleaving decisions. Useful for PC tests or
-    verifier comparison, but not the canonical compact runtime contract.
-
-minimum_grid_guidance:
-    33^3 is a practical lower bound for q16/channels16 interleaved candidate
-    LUTs, 55^3 or larger is preferred when memory allows, and 17^3 should be
-    reserved for 8-bit output, low-memory diagnostics, or cases where a separate
-    measured selector/correction layer absorbs the interpolation error.
-```
-
-Tetrahedral interpolation still applies inside each candidate LUT. Candidate
-selection and optional inter-family blending are separate from tetrahedral
-sampling and must be recorded in metadata.
-
-Because the selector may need to compare several candidate families for the same
-input, the candidate's Y value should be runtime-fast by default. The simplest
-contract is to store output tuple plus predicted/measured Y at every candidate
-node. More compact formats can store a Y sidecar, a coefficient field, or a
-shared measured-response lookup, but the runtime formula must say how candidate
-Y is retrieved before the candidate decision is made.
-
-#### Input precision
-
-A single 16-bit input coordinate per RGB axis is often enough for one ordinary
-3D LUT. Interleaved modes can expose more useful input-side granularity because
-candidate selection and blend boundaries add substructure inside the RGB cube.
-The final output may still be `channels16`, but a higher precision input
-coordinate can preserve where the target sits relative to selector curves,
-thresholds, or blend fields.
-
-Recommended coordinate contracts:
-
-```text
-q16:
-    compact default for existing RGB16 / MCU pipelines, but not necessarily
-    enough to preserve every interleaved selector/blend boundary.
-
-q32:
-    deterministic fixed-point high-precision input for MCUs or FPU-avoidant
-    runtimes.
-
-float:
-    normalized 0..1 input for FPU-capable embedded targets and SBCs.
-
-double:
-    normalized 0..1 reference path for PC/offline tools, dense LUT generation,
-    and verifier/debug output.
-```
-
-The input coordinate type should be independent from output channel bit depth:
-
-```text
-input:   q16 | q32 | float | double
-lookup:  selector/blend + tetrahedral candidate LUT sample
-output:  RGBW16 / channels16 / TemporalBFI encoder state / chipset-specific pack
-```
-
-This lets a runtime keep 16-bit physical channel values while avoiding avoidable
-input-side quantization when mixing several Y-producing solve families.
-
-#### Metadata
-
-```text
-model_family = interleaved_rgb_assisted_y_linear
-candidate_tiers = chromatic | strict_assisted | overdrive_assisted
-assisted_model_family = strict_subgamut | wx_radial_virtual | wx_virtual_axis_maxbright | wx_lp_legacy | ...
-chromatic_candidate_family = rgb_only | rgby | rgbv | rgbcmy | profile-defined
-strict_assisted_candidate_family
-overdrive_candidate_family
-selected_candidate_family = chromatic | strict_assisted | overdrive_assisted | blended
-candidate_y_error
-candidate_xy_error
-candidate_y_step_estimate
-candidate_headroom
-interleave_selection_policy
-interleave_hysteresis_state
-interleaved_storage_contract
-candidate_lut_ids
-selector_lut_id
-selector_cache_mode
-blend_contract
-runtime_formula_id
-input_coordinate_type
-input_coordinate_quantization_error
-```
-
-Verifier and correction dictionaries must preserve this metadata. The same input
-RGB can be solved by multiple physical families, and those measurements are not
-interchangeable. A strict-assisted pass is not overdrive evidence, an overdrive
-fail is not a chromatic-only fail, and a blended result must be treated as its
-own output family.
-
-#### Practical RGBW interpretation
-
-For a neutral or low-saturation color, W-assisted output may be the most power
-efficient and brightest result. For an edge or hue where the W-assisted path
-jumps from `Y_1` to `Y_5`, the RGB-only candidate may be able to land near
-`Y_2`, `Y_3`, or `Y_4` because it uses weaker emitters. At higher Y, an
-overdrive candidate may provide another usable tier before hard clipping or
-before strict output runs out of granularity.
-
-Green usually has more Y headroom than red or blue in common RGBW packages, so
-RGB-only granularity is not perfectly uniform. The mode should therefore score
-actual response curves rather than assuming all RGB channels are equally weak.
-
-
 ## 14. Tetrahedral LUT interpolation
 
 The LUT runtime should use tetrahedral interpolation by default.
@@ -2414,34 +2059,566 @@ measured response providers, pass/fail dictionaries, and capture-cloud residuals
 
 ## 16. Future physical-solution policy axis
 
-Strict sub-gamut and WX are not mutually exclusive models. They are different slices of a larger physical-solution space.
+The earlier `interleaved_rgb_assisted_y_linear` idea should be treated as a
+future physical-solution policy axis, not as a separate detailed section in the
+multi-emitter chapter.
 
-A future post-core-builder direction is to add an extra source-side policy axis:
-
-```text
-RGB + extraction/overdrive axis
-RGB + desired physical utilization axis
-RGB + scene/headroom axis
-```
-
-Practical representations:
+The problem it tries to solve is not:
 
 ```text
-two or three 3D LUTs + runtime blend coefficient
-base cube + WX delta cube
-sparse 4D LUT with a small mode-axis grid
-analytical mode selection feeding paired LUTs
+which region of input RGB should use RGB, strict RGBW, WX, or overdrive?
 ```
 
-This would allow one input RGB target to address multiple valid physical RGBW solutions:
+The problem is:
 
 ```text
-strict_subgamut result
-wx_radial_virtual result
-wx_lp_legacy / overdrive result
-measured-corrected high-W result
+given the input value domain and the emitted-Y values available from several
+legal candidate LUTs, which precise physical output value can the runtime
+actually achieve?
 ```
 
-TemporalBFI or RGBW16 output can remain 16-bit/effective-q16 while the source-side addressing carries the extra policy information.
+That makes emitted-Y part of the normative runtime contract. Without the
+candidate Y contract, the model can only guess from topology, emitter strength,
+or policy preference. That is not sufficient for this solve family.
 
-This should remain a later exploration after the main builder is stable.
+This section is future implementation / research. It may be experimented with
+before every other roadmap item is complete, but it should remain documented as a
+future policy axis until the core builder and measured response contracts are
+stable.
+
+---
+
+### 16.1 Canonical source-domain rule
+
+Candidate LUTs in this family are still normal calibrated source-domain LUTs.
+They already answer:
+
+```text
+source RGB input → calibrated output tuple for this model family
+```
+
+Therefore the runtime must not do a second device-space solve such as:
+
+```text
+source RGB
+→ target XYZxyY
+→ search/solve device response
+→ synthesize a replacement RGB coordinate
+→ sample a candidate LUT
+```
+
+That would risk calibrating a calibration. The candidate LUTs were built for the
+canonical source RGB domain, so their sampling coordinate should remain tied to
+that same source-domain request.
+
+The allowed runtime decomposition is source-domain only:
+
+```text
+source RGB input
+→ source ray / value decomposition
+→ candidate emitted-Y comparison
+→ choose one candidate family
+→ sample that candidate LUT at a source-domain coordinate on the same ray
+```
+
+For the simplest source-domain contract, the final coordinate is exactly the
+original input RGB:
+
+```text
+coord = rgb_in
+```
+
+A future family-local inverse-Y coordinate contract may be added, but it must be
+explicitly marked as such and must preserve the same source chromatic ray:
+
+```text
+rgb_in = d * v_req
+coord_k = d * v_k
+```
+
+where `v_k` is chosen from candidate `k`'s own emitted-Y contract. It must not be
+an arbitrary RGB replacement found by a new XYZ/device solve.
+
+---
+
+### 16.2 Candidate families
+
+The policy axis exposes multiple legal physical candidates for the same source
+RGB request.
+
+For RGBW, useful candidates are:
+
+```text
+C_chromatic:
+    RGB-only / no-W calibrated LUT
+
+C_strict_assisted:
+    strict RGBW sub-gamut calibrated LUT
+
+C_overdrive:
+    optional WX / virtual-primary / max-white calibrated LUT
+```
+
+For RGB+CCT or larger multi-emitter profiles, the chromatic candidate can be a
+profile-declared no-inner / no-white hull:
+
+```text
+RGB
+RGBY
+RGBV
+RGBCMY
+outer-hull-only profile candidate
+```
+
+The strict-assisted candidate is the selected strict local-topology solve. The
+overdrive candidate is explicitly a virtual/layered/WX policy and must keep its
+own provenance.
+
+Single-channel and direct dual-channel requests are direct-topology exceptions.
+They should be stored once in a shared direct-family path rather than duplicated
+inside every candidate tier. A single physical emitter or direct two-emitter line
+has no meaningful inter-family overdrive alternative unless the profile
+explicitly redirects it into a virtual model.
+
+---
+
+### 16.3 Required emitted-Y contract
+
+For every candidate family `k`, the artifact must expose both:
+
+```text
+L_k(rgb): calibrated output tuple for candidate k
+Y_k(rgb): emitted-Y produced by L_k(rgb)
+```
+
+`Y_k` is required for this policy axis. It is not optional debug data.
+
+A candidate record should distinguish:
+
+```text
+Y_ideal:
+    continuous model-predicted Y before output quantization or encoding
+
+Y_emit:
+    predicted/measured emitted Y after the actual output tuple, quantization,
+    TemporalBFI encoding, chipset depth, or response backend
+```
+
+Runtime candidate selection must use `Y_emit` by default because that is the
+value the hardware can actually produce. `Y_ideal` is useful for diagnostics,
+error reporting, and builder QA, but it cannot be the final selection truth if
+quantization or temporal encoding changes the emitted luminance.
+
+The Y field must use the same interpolation contract as the candidate output
+LUT, or must declare its own compatible contract. For a vertex-tetra candidate
+LUT, the simplest representation is:
+
+```text
+node:
+    output tuple
+    Y_emit
+    optional Y_ideal
+    optional confidence / measurement provenance
+```
+
+For a coefficient-tetra runtime, Y may be stored as an additional interpolated
+channel or as a separate affine field.
+
+---
+
+### 16.4 Union-of-Y-contracts model
+
+For a source-domain chromatic ray:
+
+```math
+rgb = d \, v
+```
+
+where:
+
+```math
+d = \frac{rgb}{\max(r,g,b)}
+```
+
+and `v` is the source-domain value scalar, each candidate family exposes a Y
+curve along that same ray:
+
+```math
+Y_{chromatic}(d,v)
+```
+
+```math
+Y_{strict}(d,v)
+```
+
+```math
+Y_{overdrive}(d,v)
+```
+
+The runtime sees the available emitted luminance set as the union of candidate
+contracts:
+
+```math
+\mathcal{Y}_{available}(d,v)
+= \{Y_k(d,v) \mid k \in \mathcal{C}\}
+```
+
+The selection goal is:
+
+```text
+find the candidate and source-domain value that produce the closest available
+emitted-Y to the requested source-domain luminance intent
+```
+
+This is why the mode is not a policy-overloaded region map. A family wins only
+because its emitted-Y contract provides a better achievable value or bracket for
+the current request.
+
+---
+
+### 16.5 Runtime decision by Y bracket
+
+For each candidate `k`, runtime should determine the local emitted-Y bracket
+around the requested value:
+
+```text
+Y_lower_k <= Y_req <= Y_upper_k
+```
+
+Then compute:
+
+```text
+nearest_error_k = min(abs(Y_req - Y_lower_k),
+                      abs(Y_upper_k - Y_req))
+
+bracket_width_k = Y_upper_k - Y_lower_k
+```
+
+The primary selection terms are:
+
+```text
+1. valid emitted-Y range for this source ray
+2. nearest emitted-Y error
+3. local bracket width / Y step
+4. invalid or nonmonotonic-region penalties
+```
+
+Tie-breaks may exist, but they are secondary:
+
+```text
+lower estimated power
+previous candidate family for temporal stability
+strict before overdrive
+higher measured confidence
+profile-preferred candidate family
+```
+
+Tie-breaks must not override a materially better emitted-Y value. They only
+resolve near-equal cases.
+
+A minimal runtime selection form:
+
+```text
+function lookup_physical_solution_axis(rgb_in):
+    if near_black(rgb_in):
+        return zero tuple
+
+    if direct_single_or_dual_exception_applies(rgb_in):
+        return direct_family_lookup(rgb_in)
+
+    d, v_req = decompose_source_ray(rgb_in)
+    Y_req    = source_luminance_request(rgb_in)
+
+    best = none
+
+    for candidate k in enabled_candidates:
+        if not candidate_valid_for_ray(k, d):
+            continue
+
+        bracket = find_Y_bracket(k.Y_contract, d, Y_req)
+        if bracket is invalid:
+            continue
+
+        v_k, Y_hit, err, step = choose_nearest_Y_in_bracket(bracket, Y_req)
+
+        score = err
+              + w_step * step
+              + nonmonotonic_penalty(k, d, v_k)
+              + confidence_penalty(k, d, v_k)
+              + tie_break_penalty(k)
+
+        if score < best.score:
+            best = {candidate: k, v: v_k, score: score}
+
+    coord = source_domain_coordinate(rgb_in, best.v)
+    return tetra_sample(best.candidate.output_lut, coord)
+```
+
+For the default source-domain candidate LUT contract:
+
+```text
+coord = rgb_in
+```
+
+For a future explicit inverse-Y coordinate contract:
+
+```text
+coord = d * best.v
+```
+
+The contract must state which form is used.
+
+---
+
+### 16.6 Y inverse / bracket accelerator
+
+Runtime cannot scan an entire 3D LUT ray for every pixel. The emitted-Y contract
+therefore needs an accelerator, but the accelerator is not the source of truth.
+The source of truth remains `Y_emit`.
+
+Useful accelerator forms:
+
+```text
+ray_value_table:
+    for each direction key and candidate, store monotonic Y knots along the
+    source value axis
+
+monotonic_envelope:
+    fitted or corrected monotonic curve used to find the bracket quickly while
+    preserving flags for raw nonmonotonic regions
+
+direct_index_table:
+    coarse inverse map from Y bucket to nearby source value bracket
+
+slope_field:
+    local derivative / Y-step estimate around each knot for faster scoring
+```
+
+The accelerator may be coarse as long as final scoring verifies against the
+candidate's actual interpolated `Y_emit` field near the chosen bracket.
+
+A practical runtime sequence:
+
+```text
+1. use inverse accelerator to find a small source-value bracket
+2. interpolate Y_emit at the bracket endpoints or a small fixed probe set
+3. choose the nearest achievable emitted-Y
+4. sample only the selected candidate output LUT
+```
+
+This preserves the precise Y contract without doing broad repeated cube lookups.
+
+---
+
+### 16.7 Nonmonotonic and quantized Y behavior
+
+The builder must inspect each candidate's emitted-Y curve along source rays.
+Ideally:
+
+```text
+as source value increases, Y_emit increases
+```
+
+In practice, measurement noise, endpoint policies, quantization, TemporalBFI
+state changes, chipset bit depth, or interpolation can create local reversals.
+The artifact should record:
+
+```text
+raw Y_emit samples
+monotonic inverse envelope
+nonmonotonic region flags
+blocked / low-trust ranges
+local bracket width
+local nearest achievable Y error
+```
+
+Runtime inverse lookup should use the monotonic envelope for fast bracketing, but
+candidate scoring should verify against raw/interpolated `Y_emit` near the chosen
+value. Badly nonmonotonic regions should either be blocked, forced to a safer
+candidate, or require a denser measured/corrected profile.
+
+---
+
+### 16.8 Storage contract
+
+The canonical future artifact is:
+
+```text
+PhysicalSolutionPolicySet:
+    model_family = future_physical_solution_policy_axis
+    source_domain = canonical_source_rgb
+    coordinate_contract = source_domain_original | source_ray_inverse_y
+
+    CandidateLUTSet:
+        chromatic_candidate_lut
+        strict_assisted_candidate_lut
+        overdrive_candidate_lut optional
+
+    CandidateYContractSet:
+        Y_emit field for each candidate
+        Y_ideal optional
+        interpolation contract
+        inverse/bracket accelerator
+        monotonic envelope
+        nonmonotonic flags
+        measurement/prediction confidence
+
+    SharedDirectFamilyTable:
+        black
+        single physical emitters
+        legal dual-emitter direct lines
+
+    SelectionContract:
+        emitted-Y nearest/bracket scoring
+        local Y-step metric
+        invalidity handling
+        tie-break policy
+        temporal hysteresis policy optional
+
+    RuntimeFormula:
+        candidate Y lookup
+        bracket / inverse lookup
+        candidate scoring
+        one selected candidate LUT sample
+        output quantization / packing
+```
+
+A selector ownership LUT is not canonical for this policy axis. It may be useful
+as a debug export or as a cache for a specific constrained runtime, but it cannot
+replace the emitted-Y contract because it loses the exact available-Y
+information the mode is designed to preserve.
+
+A fully baked single output LUT is also diagnostic/export-only unless the grid is
+dense enough to be effectively 1:1 with the desired input space. A normal mixed
+3D LUT can interpolate across unrelated candidate families and synthesize output
+tuples the policy never selected.
+
+---
+
+### 16.9 Input precision and output precision
+
+Input precision and output precision are separate contracts.
+
+The input coordinate expresses the requested source-domain color and Y intent:
+
+```text
+input: q16 | q32 | float | double
+```
+
+The output expresses the physical drive payload:
+
+```text
+output: RGB8 | RGBW8 | RGBW16 | channels16 | TemporalBFI state | chipset packet
+```
+
+A value such as `256,256,256` in a 16-bit input domain is a low requested
+neutral luminance. It is not equivalent to requesting `255,255,255` out of an
+8-bit output range. The emitted-Y contract determines which candidate can best
+represent that low neutral request with the available physical output granularity.
+
+Higher precision input forms such as `q32`, `float`, or `double` may be useful
+for this future policy axis because the candidate Y bracket can carry meaningful
+source-side granularity even when the final emitted channels remain 8-bit,
+16-bit, or TemporalBFI encoded.
+
+---
+
+### 16.10 Metadata
+
+Required or recommended metadata:
+
+```text
+model_family = future_physical_solution_policy_axis
+candidate_tiers = chromatic | strict_assisted | overdrive_assisted
+chromatic_candidate_family = rgb_only | rgby | rgbv | rgbcmy | profile-defined
+strict_assisted_candidate_family
+overdrive_candidate_family
+candidate_lut_ids
+candidate_y_contract_ids
+candidate_Y_lookup_layout
+candidate_Y_interpolation_contract
+candidate_Y_inverse_accelerator
+candidate_Y_monotonic_envelope
+candidate_Y_nonmonotonic_flags
+candidate_Y_emit_units
+candidate_Y_ideal_units optional
+selected_candidate_family
+selected_candidate_source_value
+candidate_y_error
+candidate_y_bracket_width
+candidate_y_step_estimate
+candidate_xy_error
+candidate_headroom
+candidate_confidence
+shared_direct_family_id
+selection_contract = emitted_y_nearest_bracket
+coordinate_contract = source_domain_original | source_ray_inverse_y
+input_coordinate_type = q16 | q32 | float | double
+output_channel_contract = RGB8 | RGBW8 | RGBW16 | channels16 | TemporalBFI | profile-defined
+physical_solution_tie_break_policy
+physical_solution_hysteresis_policy optional
+```
+
+Verifier and correction dictionaries must preserve candidate provenance. An
+RGB/no-W pass is not strict-assisted evidence, a strict-assisted fail is not an
+overdrive fail, and an overdrive measurement should not poison a chromatic-only
+candidate that emits a different physical tuple for the same source RGB request.
+
+---
+
+### 16.11 Practical RGBW interpretation
+
+For common RGBW packages, W often has far higher Y per code than R and B, and is
+frequently stronger than G. A strict-assisted output can be more efficient and
+brighter, but its emitted-Y ladder may skip over low or mid luminance values that
+an RGB-only tuple can hit with weaker emitters.
+
+For a neutral or low-saturation source request, the runtime should not select a
+candidate because a policy says "neutral uses W" or "low values use RGB." It
+should select the candidate whose `Y_emit` contract lands closest to the
+requested luminance with the smallest useful bracket.
+
+At higher values, strict-assisted may become the only candidate with enough
+headroom. Above that, an explicitly enabled overdrive candidate may add useful
+Y range or finer high-Y placement. The same emitted-Y contract decides these
+transitions.
+
+Green-heavy directions need special care because RGB-only granularity is not
+uniform: green can have much more Y headroom than red or blue. The model should
+therefore use the actual candidate `Y_emit` curves rather than assuming the RGB
+candidate is always the fine-granularity option.
+
+---
+
+### 16.12 Implementation status
+
+This policy axis should remain future/research until the following are stable:
+
+```text
+candidate LUT generation for chromatic, strict-assisted, and optional overdrive
+candidate emitted-Y sidecars from predicted and/or measured response providers
+candidate provenance in verifier and pass/fail dictionaries
+monotonic Y-envelope generation and nonmonotonic diagnostics
+runtime/export format for candidate LUT sets and Y contracts
+```
+
+Possible future modules:
+
+```text
+rgbw_lut_builder/model/physical_solution_policy.py
+    source-domain candidate selection from emitted-Y contracts
+
+rgbw_lut_builder/model/candidate_y_contract.py
+    Y_emit fields, inverse/bracket accelerators, monotonic envelopes,
+    nonmonotonic flags, and local Y-step metrics
+
+rgbw_lut_builder/output/interleaved_candidate_set.py
+    candidate LUT set export, Y contract export, runtime formula metadata, and
+    optional fully baked debug LUT export
+```
+
+The core invariant for future implementation is:
+
+```text
+no emitted-Y contract, no physical-solution policy axis
+```
