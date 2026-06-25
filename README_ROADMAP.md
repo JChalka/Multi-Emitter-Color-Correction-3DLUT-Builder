@@ -435,7 +435,17 @@ each candidate LUT must expose emitted-Y as part of its runtime contract:
     selector ownership LUTs are not the source of truth
     runtime should choose one candidate by closest achievable emitted-Y / local
     Y granularity, then sample that candidate only
+
+each candidate LUT may cover only the source-domain range where it is useful:
+    RGB-only might cover low/mid source values
+    strict-assisted might start above black and continue through mid/high values
+    overdrive might start only where it has useful high-Y participation
 ```
+
+The candidate grids should be treated as embedded in the canonical input domain,
+not as separate local `0..1` domains. A candidate's first stored node can be its
+lowest useful emitted-Y state; black remains a shared early exit, and direct
+single/dual families remain separate direct-topology storage.
 
 This remains future implementation / research. The in-depth algorithm, storage
 contract, non-goals, and metadata belong in `README_MATH_MODEL.md` section 16 so

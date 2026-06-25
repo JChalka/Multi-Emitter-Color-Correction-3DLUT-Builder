@@ -250,6 +250,20 @@ runtime decision:
     sample only that selected candidate LUT
 ```
 
+Candidate LUTs do not have to pretend that their own storage spans a local
+`0..1` input domain. The builder may export each candidate as a partial
+source-domain grid with nodes labelled by their actual input RGB position. For
+example, RGB-only could cover low/mid source values, strict-assisted could cover
+a partially overlapping mid/high range, and overdrive could begin only where it
+has useful high-Y participation. Runtime still receives the normal `0..1` input
+request, uses emitted-Y to choose the eligible candidate, and samples that
+candidate using source-domain coordinates.
+
+Black remains a shared early exit rather than a required node in every candidate
+cube. Direct single-channel and dual-channel cases remain separate direct-family
+storage because they cannot be overdriven by the same three-channel candidate
+axis unless a profile explicitly redirects them into a virtual model.
+
 This should not be implemented as one mixed-family 3D LUT, a coarse selector LUT,
 or a device-space re-solve that rewrites the input RGB before sampling. Candidate
 Y is a required runtime contract for this future mode because it defines the real
