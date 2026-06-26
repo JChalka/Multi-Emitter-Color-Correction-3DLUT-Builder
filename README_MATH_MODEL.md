@@ -113,6 +113,32 @@ because upstream tone mapping / transfer handling should already have produced l
 
 `K` maps named-gamut normalized white into the LED absolute luminance domain. In native mode, the source gamut primaries are the measured LED RGB primaries and the transform is already aligned with the physical device model.
 
+For a calibrated linear-light LED LUT, source RGB should be interpreted as a
+luminance / XYZ request in the declared source space, not as a raw physical-drive
+command. The selected profile white defines the absolute Y scale:
+
+```text
+1,1,1 = requested reference white at the profile's maximum achievable white
+1,0,0 = requested red primary at the same calibrated source-space Y scale
+0,1,0 = requested green primary at the same calibrated source-space Y scale
+0,0,1 = requested blue primary at the same calibrated source-space Y scale
+```
+
+A physical single-emitter or dual-emitter family may not be able to reach the
+source-space Y implied by that request. In that case the direct family clips at
+its measured physical Y endpoint. It should not be stretched so that a full red,
+green, blue, cyan, magenta, or yellow endpoint pretends to equal the profile's
+maximum white. This is especially important when a W / CW / WW / overdrive
+family can produce a much higher calibrated white than any individual chromatic
+emitter.
+
+A separate native-drive or diagnostic mode may still expose identity semantics
+such as `1,0,0 = full physical red drive`. That is a different source-value
+contract and should be marked as such in metadata. The normal calibrated LED
+3D-LUT contract is white-relative linear-light XYZ/Y, which makes later dY
+checks meaningful and prevents direct single/dual families from being evaluated
+against an impossible luminance target without explicit clipping.
+
 ---
 
 ## 2. Common simplex solve
@@ -316,6 +342,39 @@ endpoint_rolloff_knee:
 endpoint_scale_axis:
     source value / max input channel / explicit Y scale, depending on profile
 ```
+
+### Direct single/dual family Y cap
+
+Single-channel and direct dual-channel solves are direct topology exceptions, but
+they are not exempt from the calibrated Y contract. A red, green, blue, cyan,
+magenta, or yellow direct family should be solved against the source-space target
+Y and then capped where the physical family runs out of luminance.
+
+For example, if the calibrated profile white can produce roughly `~2.2k nits`
+through W-assisted or overdrive output, but the measured full-drive chromatic
+families are much lower, then their direct endpoints remain physically limited:
+
+```text
+R full drive:       measured red Y endpoint only
+G full drive:       measured green Y endpoint only
+B full drive:       measured blue Y endpoint only
+RG / yellow edge:   measured or modeled RG-family Y endpoint only
+RB / magenta edge:  measured or modeled RB-family Y endpoint only
+GB / cyan edge:     measured or modeled GB-family Y endpoint only
+```
+
+Those endpoints should be reported as clipping / dY residuals when the
+source-space request asks for more Y than the direct family can emit. They should
+not be renormalized so every direct endpoint maps to the same maximum white as a
+W-assisted or overdrive family. Expanded input precision is still useful here:
+it lets the source domain represent the point where the direct family reaches its
+physical cap and the region after that cap, instead of truncating the transition
+only because the input coordinate was too coarse.
+
+This rule applies to named gamuts and to calibrated native-gamut LUTs. A native
+raw-drive identity export can keep direct `R/G/B/RG/RB/GB` identity semantics,
+but that must be a different profile contract from a calibrated linear-light
+3D-LUT that sits after a 1D shaper / gamma / PQ mapping stage.
 
 Builder, verifier, and correction reports must use the same endpoint policy. Otherwise a verifier can incorrectly mark a LUT as failing only because expected Y/chroma was computed under a different endpoint contract.
 
@@ -2532,6 +2591,8 @@ The canonical future artifact is:
 PhysicalSolutionPolicySet:
     model_family = future_physical_solution_policy_axis
     source_domain = canonical_source_rgb
+    source_value_contract = calibrated_linear_y_request | native_drive_identity | profile-defined
+    reference_white_Y_policy = max_achievable_profile_white | profile-defined
     coordinate_contract = source_domain_embedded_grid | source_domain_original | source_ray_inverse_y
 
     CandidateLUTSet:
@@ -2641,6 +2702,9 @@ candidate_Y_inverse_accelerator
 candidate_source_domain_coverage
 candidate_source_domain_grid_layout
 candidate_node_input_rgb_tuple optional
+source_value_contract
+reference_white_Y
+direct_family_Y_cap_policy
 candidate_lowest_useful_Y
 candidate_first_stored_source_value
 candidate_Y_monotonic_envelope
@@ -2695,7 +2759,7 @@ candidate is always the fine-granularity option.
 
 ---
 
-### 16.12 Effective input bit resolution for mixed candidate sets
+### 16.12 Effective input bit resolution and direct-family Y caps
 
 The input-coordinate discussion above says which numeric representation a runtime
 may use (`q16`, `q32`, `float`, `double`). A separate question is how much input
@@ -2712,6 +2776,18 @@ RGB16 output → RGB16-style source axes are normally sufficient
 
 There is no inter-family Y selection to preserve. The source coordinate only has
 to address the one calibrated output model.
+
+For RGB→RGBW, RGB→RGBWW, or another calibrated multi-emitter output, the answer
+changes because the source value is white-relative linear-light Y/XYZ, while the
+physical output family may have a much lower endpoint than the calibrated white
+peak. Direct single-channel and direct dual-channel outputs still use shared
+storage, but their `Y_emit` curves must cap at their physical family endpoints
+instead of being stretched to the W-assisted / overdrive white scale.
+
+That means a full-scale source primary or edge is not automatically a request for
+that physical family to emit the profile's maximum white luminance. It is a
+source-space color request evaluated against the active LUT contract. If that
+family cannot reach the requested Y, it clips and records the dY residual.
 
 For the future physical-solution policy axis, the source RGB value also acts as a
 requested emitted-Y scalar along a chromatic ray. If multiple candidate LUTs are
@@ -2824,6 +2900,161 @@ outputs may use more physical emitters at once.
 These values should be read as useful source-scalar planning targets, not as a
 claim that an ordinary single-family RGB LUT requires more than its normal source
 precision.
+
+#### Direct family cap examples
+
+The same white-relative Y contract applies before considering interleaved
+candidate sets. A direct single or dual family has its own maximum emitted-Y
+curve and clips when the source request exceeds it.
+
+Illustrative wall-bench endpoints from the current RGBW setup are roughly:
+
+```text
+R full drive:          ~155–160 nits
+G full drive:          ~575–600 nits
+B full drive:          ~135 nits
+GB / cyan max:         ~665–675 nits, passing
+RB / magenta max:      ~210 nits, near-pass
+RG / yellow max:       ~466 nits, near-pass
+W-assisted / LP white: ~2.1–2.2k nits in the current bench/profile range
+```
+
+A calibrated LUT should therefore treat values such as `1,0,0`, `0,1,0`,
+`0,0,1`, `1,1,0`, `1,0,1`, and `0,1,1` as source-space requests relative to the
+selected reference-white Y scale. The direct family emits the best physical
+value it can and then caps. It should not rescale the direct family so its full
+physical endpoint equals the W-assisted white endpoint.
+
+This makes dY reporting much cleaner: a clipped red, green, blue, cyan, magenta,
+or yellow endpoint is an expected luminance shortfall, not a mysterious verifier
+failure. It also explains why slightly expanded source input precision is useful
+even without a full mixed-candidate experiment. The input domain can represent
+where a direct family reaches its physical Y cap, where strict-assisted output
+becomes useful, and where overdrive begins to add distinct `Y_emit` values.
+
+#### Chromatic endpoint compression in a single RGBW model
+
+The calibrated source-Y contract can compress direct chromatic endpoints into
+the early part of the source signal even when only one RGBW model family is being
+used. This is not an error; it is the consequence of using the active model's
+maximum achievable reference white as the source-space Y basis.
+
+For a direct family or chromatic endpoint:
+
+```math
+f_{family}(d) = \frac{Y_{cap,family}(d)}{Y_{white,basis}}
+```
+
+where `Y_white,basis` is the maximum achievable calibrated white for the selected
+model family, and `Y_cap,family(d)` is the maximum emitted-Y for the direct
+single, direct dual, or chromatic endpoint along source direction `d`.
+
+If the source input has `B_source` scalar bits, the effective scalar detail
+available before that family clips is approximately:
+
+```math
+B_{effective,family}(d) \approx B_{source} + \log_2(f_{family}(d))
+```
+
+To preserve a target output precision `B_target` inside that compressed endpoint
+range, the source scalar precision should be roughly:
+
+```math
+B_{source,needed}(d) \approx B_{target} + \log_2\left(\frac{1}{f_{family}(d)}\right)
+```
+
+This is the single-family version of the mixed-candidate precision problem. A
+`q16` source value can address a 16-bit RGBW output tuple, but a red or blue
+direct endpoint that occupies only a small fraction of the calibrated white Y
+range does not receive a full 16 bits of useful source scalar resolution before
+it reaches its physical cap.
+
+Using the illustrative wall-bench values above:
+
+```text
+strict white basis around ~1.55k nits:
+    R/B weak endpoints:       q16 input behaves closer to q12..q13 locally
+    magenta-style endpoint:   q16 input behaves closer to q13 locally
+    G/cyan/yellow endpoints:  q16 input behaves closer to q14..q15 locally
+
+overdrive white basis around ~2.1..2.2k nits:
+    R/B weak endpoints:       q16 input behaves closer to q12 locally
+    magenta-style endpoint:   q16 input behaves closer to q12..q13 locally
+    G/cyan/yellow endpoints:  q16 input behaves closer to q14 locally
+```
+
+For a TemporalBFI backend with roughly `15.5` effective output bits, a practical
+source-scalar target is therefore closer to:
+
+```text
+q17..q18:
+    useful for G-heavy, cyan, and yellow-like compressed endpoints
+
+q19..q20:
+    useful for weak red, blue, and magenta-like compressed endpoints
+
+q20+:
+    closer to full 16-bit-equivalent source detail for the weakest chromatic
+    endpoints when the active white basis is an overdrive / high-W model
+```
+
+Green-heavy directions are a useful split indicator because green has the
+largest chromatic Y endpoint in the current diode set. Near pure or strongly
+green-dominant directions, the direct family occupies a larger fraction of the
+calibrated white source range, so `q16` loses less local resolution. As the
+source direction moves away from green dominance and the solved endpoint can no
+longer use as much green, the maximum achievable calibrated Y for that direct
+family drops and the early-domain precision benefit increases.
+
+This is also why a future runtime may prefer a simpler two-domain split before a
+full multi-family candidate system:
+
+```text
+chromatic/direct LUT:
+    source-Y basis tied to direct/chromatic endpoint capability
+    preserves red/green/blue/edge scalar precision
+
+white-containing LUT:
+    source-Y basis tied to strict / W-assisted / overdrive reference white
+    preserves calibrated neutral and white-containing range
+```
+
+That split is not required for the current calibrated source-Y implementation,
+but it is a useful future option when a single source-domain RGBW LUT loses too
+much chromatic precision near the beginning of the signal.
+
+#### Runtime source precision from capture-window blending
+
+The useful source precision is not limited only by the bit depth of the captured
+video frame. A pipeline such as HyperHDR may average, weight, or otherwise blend
+many pixels inside a capture window before the LED LUT is sampled. Even if the
+captured frame is 10-bit, the capture-window reduction can produce normalized
+floating-point values between original code points.
+
+If those intermediate values are preserved into the LED mapping stage, they can
+quantize naturally to `q18`, `q20`, or `float` source coordinates and recover
+some of the useful granularity described above. If the blended value is rounded
+back to the captured frame's original code depth before the LED LUT, the extra
+precision is discarded before the calibrated source-Y contract can use it.
+
+This means source precision should be documented as a runtime value-contract
+property, not only as an input-video bit-depth property:
+
+```text
+captured video code depth:
+    e.g. 8-bit, 10-bit, 12-bit frame source
+
+post-window source value precision:
+    effective precision after averaging / weighting / downsampling / tone mapping
+
+LED LUT source coordinate precision:
+    q16, q18, q20, q32, float, or double coordinate actually supplied to the LUT
+```
+
+Designed test content can also target these intermediate values directly when a
+pipeline exposes them. The builder should therefore report useful source-bit
+targets, while the runtime should separately report whether its capture and
+averaging path actually preserves enough precision to reach those targets.
 
 #### Source-domain coverage compression
 

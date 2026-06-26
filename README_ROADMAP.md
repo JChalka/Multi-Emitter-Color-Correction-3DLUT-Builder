@@ -66,6 +66,8 @@ LED cube:
 
 This separation prevents double-applying tone curves. The LED cube should normally solve **linear-light RGB values** in the selected gamut; optional baked transfer curves can exist for testing or legacy workflows, but should not be the default.
 
+For calibrated LED LUT exports, source RGB should be treated as a reference-white-relative Y/XYZ request, not as raw physical emitter drive. Direct single-channel and dual-channel families should cap at their own measured Y endpoints when the source-space request exceeds what they can emit. A separate native-drive identity export may exist, but it should be marked as a different source-value contract.
+
 ---
 
 ## Display profiling, instrument correction, and spectral reports
@@ -441,6 +443,22 @@ each candidate LUT may cover only the source-domain range where it is useful:
     strict-assisted might start above black and continue through mid/high values
     overdrive might start only where it has useful high-Y participation
 ```
+
+The same Y contract also applies to shared direct single/dual families. They are
+not duplicated into every candidate LUT, but their emitted-Y curves still cap at
+the physical endpoint instead of being scaled to the maximum W-assisted / overdrive
+white. This keeps dY checks meaningful for primaries and edges such as red,
+green, blue, cyan, magenta, and yellow.
+
+Because calibrated white can be much brighter than weak chromatic endpoints, a
+single `q16` source domain can compress red/blue/magenta-style direct families
+into the early part of the signal. G-heavy directions are less affected because
+green carries more Y, but as a direction moves away from green dominance the
+extra early-domain precision becomes more useful. The math model therefore
+treats useful source precision as a runtime value-contract property: a runtime
+that preserves `q18`, `q20`, or float coordinates can expose more of the
+calibrated-Y contract than one that rounds blended source values back to the
+captured frame bit depth.
 
 The candidate grids should be treated as embedded in the canonical input domain,
 not as separate local `0..1` domains. A candidate's first stored node can be its

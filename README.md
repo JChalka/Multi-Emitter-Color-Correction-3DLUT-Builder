@@ -129,6 +129,13 @@ declared linear source gamut
 → tetrahedral RGB/RGBW/channels LUT
 ```
 
+For calibrated linear-light LUTs, source RGB values are interpreted as
+reference-white-relative Y/XYZ requests. Physical direct primaries and direct
+edge families should cap at their measured Y endpoints when they cannot reach the
+requested source-space luminance. Raw native-drive identity can still exist as a
+separate diagnostic/export contract, but it should not be conflated with the
+calibrated LED LUT path.
+
 ---
 
 ## Solver families
@@ -262,7 +269,19 @@ candidate using source-domain coordinates.
 Black remains a shared early exit rather than a required node in every candidate
 cube. Direct single-channel and dual-channel cases remain separate direct-family
 storage because they cannot be overdriven by the same three-channel candidate
-axis unless a profile explicitly redirects them into a virtual model.
+axis unless a profile explicitly redirects them into a virtual model. Those
+direct families still need emitted-Y contracts and physical Y caps so their dY
+shortfall is explicit when a source-space primary or edge request exceeds the
+family endpoint.
+
+A calibrated white basis can also compress direct chromatic endpoints into the
+early source range even for a single RGBW model. Weak red/blue/magenta endpoints
+may only receive q12..q13-style effective detail from a q16 source when white is
+defined by a much brighter W-assisted or overdrive output, while G-heavy
+directions retain more local precision. Runtimes that preserve q18, q20, or
+floating-point values after pixel-window blending can use that extra source
+precision; runtimes that quantize blended values back to the captured frame depth
+cannot.
 
 This should not be implemented as one mixed-family 3D LUT, a coarse selector LUT,
 or a device-space re-solve that rewrites the input RGB before sampling. Candidate
