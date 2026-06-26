@@ -2695,7 +2695,207 @@ candidate is always the fine-granularity option.
 
 ---
 
-### 16.12 Implementation status
+### 16.12 Effective input bit resolution for mixed candidate sets
+
+The input-coordinate discussion above says which numeric representation a runtime
+may use (`q16`, `q32`, `float`, `double`). A separate question is how much input
+resolution is actually useful once several candidate LUTs expose measurably
+different emitted-Y values for the same source-domain request.
+
+For a single ordinary RGB→RGB model, the answer is effectively one-to-one with
+the output device contract:
+
+```text
+RGB8 output  → RGB8-style source axes are normally sufficient
+RGB16 output → RGB16-style source axes are normally sufficient
+```
+
+There is no inter-family Y selection to preserve. The source coordinate only has
+to address the one calibrated output model.
+
+For the future physical-solution policy axis, the source RGB value also acts as a
+requested emitted-Y scalar along a chromatic ray. If multiple candidate LUTs are
+available, each candidate contributes its own distinct emitted-Y ladder:
+
+```text
+RGB / chromatic-only candidate
+strict-assisted candidate
+overdrive-assisted candidate, optional
+```
+
+The useful input precision is then governed by the union of emitted-Y values that
+are measurably different after the final output contract:
+
+```text
+Y_emit after RGB8 / RGBW8 quantization
+Y_emit after RGBW16 / channels16 quantization
+Y_emit after TemporalBFI encoding / monotonic ladder selection
+Y_emit after chipset-specific output packing
+```
+
+The builder should compute this from the actual `Y_emit` contracts when possible:
+
+```text
+For each source ray d:
+    collect every candidate's emitted-Y samples over its source-domain coverage
+    merge values that are within the profile's measurement / visibility tolerance
+    count the remaining distinct emitted-Y opportunities
+    derive the input scalar bits needed to address that union
+```
+
+In notation:
+
+```math
+N_{union}(d) = \left|\bigcup_k \{Y_{emit,k}(d,v)\}\right|_{\epsilon_Y}
+```
+
+```math
+B_{input,useful}(d) \approx \lceil \log_2(1 + N_{union}(d)) \rceil
+```
+
+where `ε_Y` is the profile's merge tolerance for values that are not measurably
+or visibly different.
+
+When the full `Y_emit` scan is not available, a planning approximation can use
+the effective output bit depth, active channel-event count, and source-domain
+coverage width.
+
+Let:
+
+```text
+B_out_eff = effective output luminance precision
+            examples: 8, 16, 15.5 for a TemporalBFI ladder with ~15.5 useful bits
+
+Q_eff     = 2^B_out_eff - 1
+
+m_k       = effective active channel-event count for candidate k along the ray
+            RGB-only path: usually 3
+            strict RGBW/RGBWW direct path: usually 3, because strict output is
+                still one direct 3-emitter simplex at a time
+            RGBW overdrive path: up to 4 when the overdrive tuple can use all
+                RGBW channels distinctly
+            RGBWW / RGBCCT overdrive path: up to 5 when the overdrive tuple can
+                use all RGBWW/CCT channels distinctly
+
+w_k(d)    = source-domain coverage width for candidate k along ray d
+            for example 0.000..0.557 has width 0.557
+```
+
+A local density estimate is:
+
+```math
+D(d,v) \approx \sum_{k \in eligible(d,v)} \frac{m_k \cdot Q_{eff}}{w_k(d)}
+```
+
+and the useful source scalar precision for the densest overlap is:
+
+```math
+B_{input,useful} \approx \left\lceil \log_2(1 + \max_{d,v} D(d,v)) \right\rceil
+```
+
+This is not a replacement for the real `Y_emit` contract. It is only a planning
+estimate for choosing `q16`, `q32`, `float`, or `double` input coordinates and
+for deciding whether a candidate-set experiment is worth storing at a given
+precision.
+
+#### Full-range planning examples
+
+If every candidate covers the whole `0..1` source-value range and its emitted-Y
+ladder is measurably distinct from the others, the estimate reduces to:
+
+```math
+B_{input,useful} \approx \left\lceil B_{out,eff} + \log_2\left(\sum_k m_k\right) \right\rceil
+```
+
+Approximate examples:
+
+```text
+Candidate set                                  Σm_k    useful bits @ 8-bit   @ 15.5-bit TemporalBFI   @ 16-bit
+RGB + strict RGBW/RGBWW                         6          11                     19                  19
+RGB + strict + RGBW overdrive                  10          12                     19                  20
+RGB + strict + RGBWW/RGBCCT overdrive          11          12                     19                  20
+```
+
+The strict RGBW/RGBWW row stays at `3` active channel-events for the strict
+candidate because strict mode still emits one legal local 3-emitter topology at a
+time. The overdrive row can increase to `4` or `5` because virtual/layered
+outputs may use more physical emitters at once.
+
+These values should be read as useful source-scalar planning targets, not as a
+claim that an ordinary single-family RGB LUT requires more than its normal source
+precision.
+
+#### Source-domain coverage compression
+
+Candidate LUTs in this policy axis should not be treated as independent local
+`0..1` domains. Each candidate can declare where its nodes live in the canonical
+input domain. This changes the useful input precision because emitted-Y events
+can be packed into only part of the source range.
+
+Using the illustrative source-domain coverage ranges:
+
+```text
+RGB-only:   0.000 .. 0.557  width 0.557
+strict:     0.270 .. 0.880  width 0.610
+overdrive:  0.370 .. 1.000  width 0.630
+```
+
+For an RGBW overdrive-capable TemporalBFI profile with `B_out_eff ≈ 15.5`:
+
+```text
+RGB + strict overlap:
+    density factor ≈ 3/0.557 + 3/0.610 ≈ 10.30
+    useful input bits ≈ ceil(15.5 + log2(10.30)) = 19
+
+RGB + strict + RGBW overdrive overlap:
+    density factor ≈ 3/0.557 + 3/0.610 + 4/0.630 ≈ 16.65
+    useful input bits ≈ ceil(15.5 + log2(16.65)) = 20
+```
+
+For the same coverage shape with true 16-bit output, the dense three-candidate
+RGBW case rounds up to roughly `21` useful source-scalar bits. For 8-bit output,
+the same shape is closer to `13` useful source-scalar bits.
+
+The practical consequence is that a `q16` input coordinate may be adequate for a
+single 15.5-bit or 16-bit output family, but it can truncate some useful
+candidate-selection headroom when RGB, strict-assisted, and overdrive-assisted
+families all produce distinct emitted-Y ladders in overlapping source-domain
+intervals. `q20`/`q21` fixed-point source coordinates, or `float`, are more
+credible targets for a high-precision interleaved experiment.
+
+#### Low-end D65 probe interpretation
+
+Manual TemporalBFI `channels16` probes against the monotonic ladder showed the
+expected pattern on the wall-wash bench: RGB-only could land near D65 at roughly
+the low-nit floor, while strict RBW/RGW/BGW and overdrive RGBW-style candidates
+first approached D65 at substantially higher luminance. In the observed bench
+sample, RGB-only near-D65 appeared around `~2 nits`, strict-assisted near-D65
+states appeared closer to `~6.5–8 nits`, and overdrive-style near-D65 states
+were around `~7 nits`.
+
+That supports two storage rules:
+
+```text
+1. Black remains a shared early exit. Candidate cubes do not need to spend their
+   first node on 0,0,0 when that request always means no emitted light.
+
+2. A candidate cube's first stored node should be close to that family’s lowest
+   useful / lowest measurable source-domain state, such as the first near-D65
+   point for a neutral path, not an artificial local-domain zero.
+```
+
+On the installed HyperHDR wall-wash setup, distance and spread may push the same
+lowest useful D65 floor lower than the bench box measurement, so this threshold
+belongs in the emitted-Y/profile contract rather than being hardcoded.
+
+The same analysis applies to RGBWW/RGBCCT. Adding more emitters can create finer
+control once the family is active, but it can also raise the lowest useful
+near-neutral floor because more participating emitters usually means a brighter
+minimum measurable state.
+
+---
+
+### 16.13 Implementation status
 
 This policy axis should remain future/research until the following are stable:
 
